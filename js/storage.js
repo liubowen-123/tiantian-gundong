@@ -7,14 +7,15 @@
     settings: 'ttgd.settings.v1',
     log: 'ttgd.log.v1',
     lastDate: 'ttgd.lastDate.v1',
-    exam: 'ttgd.exam.v1'
+    exam: 'ttgd.exam.v1',
+    trash: 'ttgd.trash.v1'    // 回收站
   };
 
   const DEFAULT_SETTINGS = {
     dailyNew: 10,          // 每日新学目标
     intervals: [1, 2, 4, 7, 15, 30],  // 艾宾浩斯复习间隔（天）
     theme: 'green',
-    darkMode: false,       // 深色模式
+    themeMode: 'auto',     // auto | light | dark
     examMinutes: 180,      // 整卷考试时长（分钟）
     examCount: 20          // 整卷考试的题目数量（从题库随机抽取）
   };
@@ -283,9 +284,38 @@
     },
     removeContent(id) {
       const list = this.getContent();
+      const idx = list.findIndex(x => x.id === id);
+      if (idx < 0) return false;
+      // 移入回收站
+      const trash = this.getTrash();
+      const item = list[idx];
+      trash.push(Object.assign({}, item, { _deletedAt: Date.now() }));
+      this.saveTrash(trash.slice(-200)); // 最多保留 200 条
       const next = list.filter(x => x.id !== id);
       this.saveContent(next);
-      return next.length !== list.length;
+      return true;
+    },
+    /** 回收站：获取已删除条目 */
+    getTrash() {
+      return read(KEYS.trash, []);
+    },
+    saveTrash(arr) {
+      write(KEYS.trash, arr);
+    },
+    /** 从回收站恢复 */
+    restoreFromTrash(id) {
+      const trash = this.getTrash();
+      const idx = trash.findIndex(x => x.id === id);
+      if (idx < 0) return false;
+      const item = trash[idx];
+      delete item._deletedAt;
+      this.addContent(item);
+      this.saveTrash(trash.filter(x => x.id !== id));
+      return true;
+    },
+    /** 清空回收站 */
+    clearTrash() {
+      write(KEYS.trash, []);
     },
     getById(id) {
       return this.getContent().find(x => x.id === id) || null;
@@ -344,13 +374,14 @@
     },
     logDay(dateStr, delta) {
       const log = this.getLog();
-      if (!log[dateStr]) log[dateStr] = { review: 0, correct: 0, wrong: 0, newLearned: 0, graduated: 0 };
+      if (!log[dateStr]) log[dateStr] = { review: 0, correct: 0, wrong: 0, newLearned: 0, graduated: 0, seconds: 0 };
       const d = log[dateStr];
       d.review += (delta.review || 0);
       d.correct += (delta.correct || 0);
       d.wrong += (delta.wrong || 0);
       d.newLearned += (delta.newLearned || 0);
       d.graduated += (delta.graduated || 0);
+      d.seconds += (delta.seconds || 0);
       this.saveLog(log);
       return d;
     },
@@ -381,11 +412,12 @@
     exportAll() {
       return JSON.stringify({
         app: 'tiantian-gundong',
-        version: 1,
+        version: 2,
         exportedAt: new Date().toISOString(),
         settings: this.getSettings(),
         content: this.getContent(),
-        log: this.getLog()
+        log: this.getLog(),
+        trash: this.getTrash()
       }, null, 2);
     },
     importAll(jsonStr) {
@@ -394,12 +426,13 @@
       if (Array.isArray(data.content)) this.replaceAll(data.content);
       if (data.settings) write(KEYS.settings, data.settings);
       if (data.log) this.saveLog(data.log);
+      if (Array.isArray(data.trash)) this.saveTrash(data.trash);
       return data.content ? data.content.length : 0;
     },
 
     resetAll() {
       Object.keys(KEYS).forEach(k => localStorage.removeItem(KEYS[k]));
-      localStorage.removeItem('ttgd.bundled.v1'); // 重置后重新自动导入图片挖空卡
+      localStorage.removeItem('ttgd.bundled.v1');
       contentCache = null;
     }
   };

@@ -16,6 +16,7 @@
     learnSource: 'today',  // today | subject | wrong
     learnBackTo: 'today',
     learnTitle: '今日学习完成！',
+    learnSessionStart: null, // 学习会话开始时间戳
     libFilter: 'all',
     libSearch: '',
     libView: 'flat',         // flat 平铺 | group 按科目·章节分组
@@ -296,6 +297,7 @@
     App.learnSource = source || 'today';
     App.learnBackTo = backTo || 'today';
     App.learnTitle = title || '今日学习完成！';
+    App.learnSessionStart = Date.now();
     switchTab('learn');
     renderLearn();
   }
@@ -897,7 +899,7 @@
         <button class="zoom-btn" id="z-cover">🎭 盖回全部</button>
         <button class="zoom-btn" id="z-reveal">显示全部答案</button>
       </div>
-      <div class="zoom-hint">点挖空开/合 · 双指缩放 · 双击放大 · 拖动平移</div>`;
+      <div class="zoom-hint">点挖空开/合 · 滚轮缩放 · 双指缩放 · 双击放大 · 拖动平移</div>`;
     document.body.appendChild(ov);
     const stage = ov.querySelector('#zoom-stage');
     const zoomMasks = () => ov.querySelectorAll('.img-mask');
@@ -942,6 +944,13 @@
       }
     }, { passive: false });
     ov.addEventListener('touchend', () => { lastTouch = null; });
+    // 桌面鼠标滚轮缩放
+    ov.addEventListener('wheel', e => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      scale = Math.min(5, Math.max(1, scale * delta));
+      apply();
+    }, { passive: false });
     ov.querySelector('#zoom-close').addEventListener('click', () => ov.remove());
   }
 
@@ -972,6 +981,14 @@
 
   function renderLearnDone() {
     App.learnSessionDone = true;
+    // 记录学习时长
+    if (App.learnSessionStart) {
+      const elapsed = Math.round((Date.now() - App.learnSessionStart) / 1000);
+      if (elapsed > 10) {
+        TTStore.logDay(TTStore.todayStr(), { seconds: elapsed });
+      }
+      App.learnSessionStart = null;
+    }
     $('#learn-progress-bar').style.width = '100%';
     hideExamTimer();
     const total = App.learnQueue.length;
@@ -1439,14 +1456,23 @@
     $('#s-accuracy').textContent = accuracy === null ? '--' : accuracy + '%';
     $('#s-streak').textContent = streak;
 
+    // 学习时长
+    const log = TTStore.getLog();
+    const today = TTStore.todayStr();
+    const todayLog = log[today] || {};
+    const todayMin = Math.round((todayLog.seconds || 0) / 60);
+    $('#s-time-label').textContent = todayMin > 0 ? `今日 ${todayMin} 分钟` : '今日尚未学习';
+
+    // 近 7 天正确率趋势（Canvas 2D）
+    drawTrendChart(log);
+
     // 日历
     const cal = $('#calendar');
     const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
     let html = weekdays.map(d => `<div class="cal-day weekday">${d}</div>`).join('');
-    const log = TTStore.getLog();
-    const today = new Date();
-    const start = new Date(today);
-    start.setDate(today.getDate() - 29);
+    const todayDate = new Date();
+    const start = new Date(todayDate);
+    start.setDate(todayDate.getDate() - 29);
     const offset = start.getDay();
     start.setDate(start.getDate() - offset);
     const end = new Date(start);
@@ -1468,6 +1494,154 @@
 
     // 各科掌握度
     renderMasteryList($('#subject-bars'), TTScheduler.subjectMastery());
+
+    // 预计毕业进度：未毕业条目 / 每日新学 → 预估天数
+    const total = content.length;
+    const remain = content.filter(x => !TTScheduler.isGraduated(x)).length;
+    const estPct = total === 0 ? 0 : Math.round((total - remain) / total * 100);
+    const dailyNew = Math.max(1, TTStore.getSettings().dailyNew || 10);
+    const estDays = Math.ceil(remain / dailyNew);
+    $('#est-fill').style.width = estPct + '%';
+    $('#est-pct').textContent = estPct + '%';
+    $('#s-estimate').textContent = remain === 0 ? '全部毕业 🎉' : `未毕业 ${remain} 条 · 按每日 ${dailyNew} 条约需 ${estDays} 天`;
+
+    // 错题科目分布
+    const wrongBySub = {};
+    TTScheduler.wrongBook().forEach(x => {
+      wrongBySub[x.subject] = (wrongBySub[x.subject] || 0) + (x.wrongCount || 0);
+    });
+    const wrongArr = Object.keys(wrongBySub).map(s => ({ subject: s, total: wrongBySub[s] })).sort((a, b) => b.total - a.total);
+    const wrongMax = wrongArr.reduce((m, o) => Math.max(m, o.total), 0) || 1;
+    $('#wrong-bars').innerHTML = wrongArr.length
+      ? wrongArr.map(o => `
+        <div class="mastery-row">
+          <div class="mastery-name">${esc(o.subject)}</div>
+          <div class="mastery-track"><div class="mastery-fill wrong" style="width:${Math.round(o.total / wrongMax * 100)}%"></div></div>
+          <div class="mastery-num">${o.total} 次</div>
+        </div>`).join('')
+      : '<div style="text-align:center;color:var(--text-3);font-size:13px;padding:6px">暂无错题</div>';
+  }
+
+  /** 绘制近 7 天正确率趋势折线图 */
+  function drawTrendChart(log) {
+    const canvas = document.getElementById('trend-chart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const PAD = { top: 20, right: 20, bottom: 25, left: 30 };
+    const chartW = W - PAD.left - PAD.right;
+    const chartH = H - PAD.top - PAD.bottom;
+
+    ctx.clearRect(0, 0, W, H);
+
+    // 收集近 7 天数据
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = TTStore.todayStr(d);
+      const day = log[key] || {};
+      const total = (day.review || 0) + (day.newLearned || 0);
+      const correct = day.correct || 0;
+      const pct = total > 0 ? Math.round(correct / total * 100) : null;
+      days.push({ key, label: (d.getMonth() + 1) + '/' + d.getDate(), pct, total });
+    }
+
+    const valid = days.filter(d => d.pct !== null);
+    if (valid.length < 2) {
+      ctx.fillStyle = '#9ca3af';
+      ctx.font = '13px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('数据不足，继续学习后将显示趋势', W / 2, H / 2 + 5);
+      $('#s-trend-label').textContent = valid.length + ' 天有数据';
+      return;
+    }
+
+    $('#s-trend-label').textContent = valid.length + ' / 7 天有数据';
+
+    const maxPct = 100;
+    const minPct = 0;
+    const range = maxPct - minPct || 1;
+
+    // 绘制网格线
+    ctx.strokeStyle = '#eef0f3';
+    ctx.lineWidth = 1;
+    for (let p = 0; p <= 100; p += 25) {
+      const y = PAD.top + chartH - (p - minPct) / range * chartH;
+      ctx.beginPath();
+      ctx.moveTo(PAD.left, y);
+      ctx.lineTo(W - PAD.right, y);
+      ctx.stroke();
+      ctx.fillStyle = '#9ca3af';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(p + '%', PAD.left - 4, y + 3);
+    }
+
+    // 绘制折线
+    const points = days.map((d, i) => {
+      const x = PAD.left + (i / (days.length - 1)) * chartW;
+      const y = d.pct !== null ? PAD.top + chartH - (d.pct - minPct) / range * chartH : null;
+      return { x, y, ...d };
+    });
+
+    // 填充区域
+    const validPoints = points.filter(p => p.y !== null);
+    if (validPoints.length >= 2) {
+      ctx.beginPath();
+      ctx.moveTo(validPoints[0].x, validPoints[0].y);
+      for (let i = 1; i < validPoints.length; i++) {
+        ctx.lineTo(validPoints[i].x, validPoints[i].y);
+      }
+      ctx.lineTo(validPoints[validPoints.length - 1].x, PAD.top + chartH);
+      ctx.lineTo(validPoints[0].x, PAD.top + chartH);
+      ctx.closePath();
+      const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + chartH);
+      grad.addColorStop(0, 'rgba(47,143,107,0.2)');
+      grad.addColorStop(1, 'rgba(47,143,107,0.02)');
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+
+    // 连线
+    ctx.strokeStyle = '#2f8f6b';
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    let started = false;
+    points.forEach(p => {
+      if (p.y !== null) {
+        if (!started) { ctx.moveTo(p.x, p.y); started = true; }
+        else ctx.lineTo(p.x, p.y);
+      }
+    });
+    ctx.stroke();
+
+    // 数据点
+    points.forEach(p => {
+      if (p.y !== null) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#2f8f6b';
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // 数值标签
+        ctx.fillStyle = '#1f2937';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(p.pct + '%', p.x, p.y - 10);
+      }
+    });
+
+    // X 轴标签
+    points.forEach(p => {
+      ctx.fillStyle = '#6b7280';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(p.label, p.x, H - 5);
+    });
   }
 
   /* ================= 模态框通用 ================= */
@@ -1644,6 +1818,54 @@
     });
   }
 
+  /* ================= 回收站 ================= */
+  function openTrash() {
+    const trash = TTStore.getTrash();
+    if (trash.length === 0) {
+      openModal(`
+        <div class="modal-title">回收站</div>
+        <div class="wrong-summary">回收站为空。</div>
+        <div class="modal-actions"><button class="btn-primary" id="trash-close">关闭</button></div>
+      `);
+      $('#trash-close').addEventListener('click', closeModal);
+      return;
+    }
+    openModal(`
+      <div class="modal-title">回收站（${trash.length} 条）</div>
+      <div class="wrong-summary">已删除的内容可在此恢复，最多保留 200 条。</div>
+      <div class="wrong-list-wrap" style="max-height:300px;overflow-y:auto">
+        ${trash.map(t => `
+          <div class="wrong-row" style="display:flex;align-items:center;gap:8px">
+            <span class="tag ${t.type === 'quiz' ? 'type' : ''}" style="flex-shrink:0">${t.type === 'quiz' ? '选择' : '记忆'}</span>
+            <span class="wr-q" style="flex:1">${esc(truncate(t.question, 40))}</span>
+            <button class="btn-ghost trash-restore" data-id="${t.id}" style="font-size:12px;padding:4px 8px">↩ 恢复</button>
+          </div>`).join('')}
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="trash-close">关闭</button>
+        <button class="btn-ghost" id="trash-clear" style="color:var(--danger)">清空回收站</button>
+      </div>
+    `);
+    $('#trash-close').addEventListener('click', closeModal);
+    $('#trash-clear').addEventListener('click', () => {
+      if (confirm('确定清空回收站？删除的内容将永久丢失。')) {
+        TTStore.clearTrash();
+        closeModal();
+        toast('回收站已清空');
+      }
+    });
+    $$('.trash-restore').forEach(btn => {
+      btn.addEventListener('click', () => {
+        TTStore.restoreFromTrash(btn.dataset.id);
+        toast('已恢复');
+        closeModal();
+        openTrash();
+        renderLibrary();
+        renderToday();
+      });
+    });
+  }
+
   /* ================= 题库 CSV 导入 ================= */
   function openCsvImport() {
     const template = [
@@ -1814,8 +2036,9 @@
       <div class="form-group">
         <label class="form-label">外观</label>
         <div class="radio-row" id="set-theme-row">
-          <div class="radio-pill ${s.darkMode ? '' : 'active'}" data-theme="light">☀️ 浅色</div>
-          <div class="radio-pill ${s.darkMode ? 'active' : ''}" data-theme="dark">🌙 深色</div>
+          <div class="radio-pill ${(!s.themeMode || s.themeMode === 'auto') ? 'active' : ''}" data-theme="auto">🔄 跟随系统</div>
+          <div class="radio-pill ${s.themeMode === 'light' ? 'active' : ''}" data-theme="light">☀️ 浅色</div>
+          <div class="radio-pill ${s.themeMode === 'dark' ? 'active' : ''}" data-theme="dark">🌙 深色</div>
         </div>
       </div>
       <div class="form-group">
@@ -1834,6 +2057,18 @@
         <div class="form-group">
           <label class="form-label">整卷题目数</label>
           <input class="form-input" type="number" min="1" id="set-examcount" value="${s.examCount || 20}">
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
+        <label class="form-label" style="font-weight:700;color:var(--text)">🔔 每日提醒</label>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">提醒时间（24小时制）</label>
+          <input class="form-input" type="time" id="set-remind-time" value="${s.remindTime || '20:00'}">
+        </div>
+        <div class="form-group" style="display:flex;align-items:flex-end;padding-bottom:4px">
+          <button class="btn-ghost" id="set-notify-test" style="font-size:13px">🔔 测试通知</button>
         </div>
       </div>
       <div class="form-group" style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
@@ -1885,6 +2120,27 @@
       renderLibrary();
       renderStats();
     });
+    // 通知测试按钮
+    const notifyBtn = $('#set-notify-test');
+    if (notifyBtn) {
+      notifyBtn.addEventListener('click', () => {
+        if (!('Notification' in window)) { toast('当前浏览器不支持通知'); return; }
+        if (Notification.permission === 'denied') { toast('通知已被拒绝，请到浏览器设置中开启'); return; }
+        if (Notification.permission === 'granted') {
+          new Notification('天天滚动 · 测试通知', { body: '如果看到这条通知，说明提醒功能正常 ✅', icon: 'icons/icon-192.png' });
+          toast('测试通知已发送');
+        } else {
+          Notification.requestPermission().then(perm => {
+            if (perm === 'granted') {
+              new Notification('天天滚动', { body: '通知已开启，每天 ' + (TTStore.getSettings().remindTime || '20:00') + ' 提醒你学习 📚', icon: 'icons/icon-192.png' });
+              toast('通知已开启');
+            } else {
+              toast('通知被拒绝，可在设置中重新开启');
+            }
+          });
+        }
+      });
+    }
     $('#set-save').addEventListener('click', () => {
       const daily = Math.max(0, parseInt($('#set-daily').value, 10) || 0);
       const intervals = $('#set-intervals').value.split(/[,，\s]+/).map(Number).filter(n => n > 0);
@@ -1896,13 +2152,15 @@
       const examMin = Math.max(1, parseInt($('#set-exammin').value, 10) || 180);
       const examCount = Math.max(1, parseInt($('#set-examcount').value, 10) || 20);
       const activeTheme = $('.radio-pill.active[data-theme]');
-      const darkMode = activeTheme ? activeTheme.dataset.theme === 'dark' : !!s.darkMode;
+      const themeMode = activeTheme ? activeTheme.dataset.theme : (s.themeMode || 'auto');
+      const remindTime = $('#set-remind-time').value || '20:00';
       TTStore.saveSettings({
         dailyNew: daily,
         intervals,
         examMinutes: examMin,
         examCount,
-        darkMode,
+        themeMode,
+        remindTime,
         anki: {
           learningSteps: steps.length > 0 ? steps : [1, 10],
           graduatingInterval: grad,
@@ -1988,6 +2246,7 @@
     $('#btn-import').addEventListener('click', openImport);
     on('#btn-csv', 'click', openCsvImport);
     on('#btn-anki', 'click', openAnkiImport);
+    on('#btn-trash', 'click', openTrash);
 
     // 练习中心入口
     $('#entry-record').addEventListener('click', () => switchTab('stats'));
@@ -2047,14 +2306,62 @@
 
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') closeModal();
+      // 输入框内不触发快捷键
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      // Anki 评级快捷键：1=重来 2=困难 3=良好 4=简单
+      if (App.tab === 'learn' && !App.exam && !App.learnBusy && !App.learnSessionDone) {
+        const map = { '1': 'again', '2': 'hard', '3': 'good', '4': 'easy' };
+        const r = map[e.key];
+        if (r) {
+          const btn = document.querySelector(`.anki-btn[data-r="${r}"]`);
+          if (btn) { e.preventDefault(); btn.click(); }
+        }
+        // 选择题快捷键：A-D / a-d / 1-4 选答案
+        if (!$('#btn-next') && !$('#btn-multi-submit')) {
+          const optIdx = { a: 0, b: 1, c: 2, d: 3, A: 0, B: 1, C: 2, D: 3, '1': 0, '2': 1, '3': 2, '4': 3 }[e.key];
+          if (optIdx !== undefined) {
+            const opt = document.querySelector(`#opt-list .option[data-i="${optIdx}"]`);
+            if (opt && !opt.classList.contains('disabled')) { e.preventDefault(); opt.click(); }
+          }
+        }
+        // Space 翻面记忆卡
+        if (e.key === ' ' || e.key === 'Space') {
+          const fc = $('#flashcard');
+          if (fc && !fc.classList.contains('flipped')) {
+            e.preventDefault();
+            fc.click();
+          }
+        }
+      }
+      // Enter 下一题（学习完成页）
+      if (e.key === 'Enter' && App.tab === 'learn') {
+        const next = $('#btn-next') || $('#btn-done-home');
+        if (next) { e.preventDefault(); next.click(); }
+      }
     });
   }
 
-  /** 应用浅色/深色主题 */
+  /** 应用浅色/深色主题：跟随系统（默认）或手动选择 */
   function applyTheme() {
     try {
-      const dark = !!TTStore.getSettings().darkMode;
+      const s = TTStore.getSettings();
+      let dark;
+      if (s.themeMode === 'auto' || !s.themeMode) {
+        dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      } else {
+        dark = s.themeMode === 'dark';
+      }
       document.documentElement.classList.toggle('dark', dark);
+    } catch (e) { /* 忽略 */ }
+  }
+  /** 监听系统主题变化，仅在 auto 模式下生效 */
+  function listenSystemTheme() {
+    try {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      mq.addEventListener('change', () => {
+        const s = TTStore.getSettings();
+        if (s.themeMode === 'auto' || !s.themeMode) applyTheme();
+      });
     } catch (e) { /* 忽略 */ }
   }
 
@@ -2067,6 +2374,7 @@
       console.error('初始化数据失败', e);
     }
     applyTheme();
+    listenSystemTheme();
     try {
       bindEvents();
     } catch (e) {

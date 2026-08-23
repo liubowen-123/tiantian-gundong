@@ -204,6 +204,7 @@
       <div class="header-top">
         <h1 class="app-title">内容库</h1>
         <div class="header-actions">
+          <button class="icon-btn" id="btn-trash" title="回收站">🗑</button>
           <button class="icon-btn" id="btn-anki" title="导入 Anki">🧠</button>
           <button class="icon-btn" id="btn-csv" title="导入题库(CSV)">📚</button>
           <button class="icon-btn" id="btn-import" title="导入">⇪</button>
@@ -247,8 +248,39 @@
       </div>
 
       <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">近 7 天正确率趋势</span>
+          <span class="card-sub" id="s-trend-label">暂无数据</span>
+        </div>
+        <canvas id="trend-chart" width="440" height="150" style="width:100%;height:150px;border-radius:8px;background:var(--card)"></canvas>
+      </div>
+
+      <div class="card">
         <div class="card-title">近 30 天打卡</div>
         <div class="calendar" id="calendar"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">学习时长</span>
+          <span class="card-sub" id="s-time-label">今日 0 分钟</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">预计毕业进度</span>
+          <span class="card-sub" id="s-estimate">--</span>
+        </div>
+        <div class="est-row">
+          <div class="est-track"><div class="est-fill" id="est-fill" style="width:0%"></div></div>
+          <span class="est-pct" id="est-pct">0%</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">错题科目分布</div>
+        <div class="mastery-list" id="wrong-bars"></div>
       </div>
 
       <div class="card">

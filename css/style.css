@@ -271,7 +271,8 @@ html, body {
 
 /* 图片挖空卡 */
 .imgcard { position: relative; margin-top: 10px; cursor: pointer; }
-.imgcard-img { display: block; width: 100%; border-radius: 12px; }
+.imgcard-img { display: block; width: 100%; border-radius: 12px; background: #eef1f0; }
+.imgcard-img, .zoom-img, .img-cell-img, .ch-thumb { background: #eef1f0; }
 .imgcard-masks { position: absolute; inset: 0; pointer-events: none; }
 .img-mask { position: absolute; background: #fff; box-shadow: inset 0 0 0 1px rgba(47,143,107,.25); pointer-events: auto; cursor: pointer; transition: background .2s; }
 .img-mask.revealed { background: transparent; box-shadow: inset 0 0 0 1px rgba(47,143,107,.5); }
@@ -913,6 +914,11 @@ body { letter-spacing: .2px; }
   background: linear-gradient(90deg, #2f8f6b, #4fc08f);
   box-shadow: 0 1px 3px rgba(47, 143, 107, .3);
 }
+.mastery-fill.wrong { background: linear-gradient(90deg, #e5484d, #f87171); box-shadow: 0 1px 3px rgba(229,72,77,.3); }
+.est-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.est-track { flex: 1; height: 12px; background: var(--bg); border-radius: 6px; overflow: hidden; }
+.est-fill { height: 100%; background: linear-gradient(90deg, #2f8f6b, #4fc08f); border-radius: 6px; transition: width .4s; }
+.est-pct { font-size: 13px; color: var(--primary-dark); font-weight: 700; }
 .mastery-track, .sub-bar-track, .subj-row-track { box-shadow: inset 0 1px 2px rgba(31, 59, 48, .06); }
 
 /* 图片挖空卡 */
