@@ -312,6 +312,15 @@ html, body {
   display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
 .zoom-hint { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,.75); font-size: 13px; z-index: 301; white-space: nowrap; }
+.zoom-overlay .img-mask.revealed { background: transparent; box-shadow: inset 0 0 0 1px rgba(79,192,143,.6); }
+.zoom-toolbar {
+  position: fixed; bottom: 64px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 12px; z-index: 301;
+}
+.zoom-btn {
+  background: rgba(255,255,255,.16); color: #fff; border: 1px solid rgba(255,255,255,.3);
+  border-radius: 999px; padding: 10px 20px; font-size: 14px; cursor: pointer;
+}
 .browse-back { font-size: 13px; color: var(--primary); font-weight: 600; padding: 8px 2px; cursor: pointer; border-bottom: 1px dashed var(--border); margin-bottom: 8px; }
 .subj-grid { display: flex; flex-direction: column; gap: 10px; }
 .subj-card {

@@ -588,6 +588,7 @@
     if (multi) multi.addEventListener('click', openImageStudy);
     const all = $('#browse-all');
     if (all) all.addEventListener('click', () => {
+      closeModal();
       startImageStudy([{ subject: App.imgBrowseSub, chapter: App.imgBrowseCh }]);
     });
     $$('.subj-card').forEach(el => el.addEventListener('click', () => {
@@ -596,7 +597,8 @@
       renderImageBrowse();
     }));
     $$('.ch-row').forEach(el => el.addEventListener('click', () => {
-      // 点章节行 → 直接进入该章学习
+      // 点章节行 → 直接进入该章学习（先关弹窗）
+      closeModal();
       startImageStudy([{ subject: App.imgBrowseSub, chapter: el.dataset.ch }]);
     }));
     $$('.ch-grid').forEach(btn => btn.addEventListener('click', e => {
@@ -878,10 +880,10 @@
     $('#btn-zoom').addEventListener('click', () => openZoomViewer(it));
   }
 
-  /* ---------- 看图卡：全屏放大查看器（双指缩放/双击/拖动） ---------- */
+  /* ---------- 看图卡：全屏放大查看器（双指缩放/双击/拖动 + 逐块开关） ---------- */
   function openZoomViewer(it) {
-    const boxes = it.masks.map(b =>
-      `<div class="img-mask" style="left:${(b[0] * 100).toFixed(3)}%;top:${(b[1] * 100).toFixed(3)}%;width:${(b[2] * 100).toFixed(3)}%;height:${(b[3] * 100).toFixed(3)}%"></div>`
+    const boxes = it.masks.map((b, i) =>
+      `<div class="img-mask" data-i="${i}" style="left:${(b[0] * 100).toFixed(3)}%;top:${(b[1] * 100).toFixed(3)}%;width:${(b[2] * 100).toFixed(3)}%;height:${(b[3] * 100).toFixed(3)}%"></div>`
     ).join('');
     const ov = document.createElement('div');
     ov.className = 'zoom-overlay';
@@ -891,9 +893,23 @@
         <div class="imgcard-masks">${boxes}</div>
       </div>
       <div class="zoom-close" id="zoom-close">✕</div>
-      <div class="zoom-hint">双指缩放 · 双击放大 · 拖动平移</div>`;
+      <div class="zoom-toolbar">
+        <button class="zoom-btn" id="z-cover">🎭 盖回全部</button>
+        <button class="zoom-btn" id="z-reveal">显示全部答案</button>
+      </div>
+      <div class="zoom-hint">点挖空开/合 · 双指缩放 · 双击放大 · 拖动平移</div>`;
     document.body.appendChild(ov);
     const stage = ov.querySelector('#zoom-stage');
+    const zoomMasks = () => ov.querySelectorAll('.img-mask');
+    // 逐块开关
+    zoomMasks().forEach(m => {
+      m.addEventListener('click', e => {
+        e.stopPropagation();
+        m.classList.toggle('revealed');
+      });
+    });
+    ov.querySelector('#z-cover').addEventListener('click', () => zoomMasks().forEach(m => m.classList.remove('revealed')));
+    ov.querySelector('#z-reveal').addEventListener('click', () => zoomMasks().forEach(m => m.classList.add('revealed')));
     let scale = 1, tx = 0, ty = 0;
     let startDist = 0, startScale = 1, lastTouch = null, lastTap = 0;
     const apply = () => { stage.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; };
@@ -903,6 +919,8 @@
         startScale = scale;
         e.preventDefault();
       } else if (e.touches.length === 1) {
+        // 点挖空时不触发双击缩放
+        if (e.target.closest && e.target.closest('.img-mask')) return;
         lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         const now = Date.now();
         if (now - lastTap < 300) {
