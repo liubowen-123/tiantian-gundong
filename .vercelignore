@@ -1,0 +1,7 @@
+# 大文件不入库（图片在 OSS）
+images/
+*.apkg
+*.anki2
+导入_图像卡.json
+导入_卡组_*.json
+_tmp/
