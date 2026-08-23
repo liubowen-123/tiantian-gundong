@@ -62,6 +62,8 @@
     }
   }
 
+  let contentCache = null; // 内容内存缓存（性能优化）
+
   /* ================= CSV / Anki 解析（纯函数，可测试） ================= */
 
   /** 解析分隔文本为二维数组（处理引号、自定义分隔符、CRLF） */
@@ -230,11 +232,13 @@
     daysAgo,
     addDays,
 
-    // ---- 内容 ----
+    // ---- 内容（内存缓存，避免每次全量解析 localStorage） ----
     getContent() {
-      return read(KEYS.content, []);
+      if (!contentCache) contentCache = read(KEYS.content, []);
+      return contentCache;
     },
     saveContent(list) {
+      contentCache = list;
       write(KEYS.content, list);
     },
     /** 构建完整条目（id/默认字段） */
@@ -396,6 +400,7 @@
     resetAll() {
       Object.keys(KEYS).forEach(k => localStorage.removeItem(KEYS[k]));
       localStorage.removeItem('ttgd.bundled.v1'); // 重置后重新自动导入图片挖空卡
+      contentCache = null;
     }
   };
 

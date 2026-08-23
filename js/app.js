@@ -19,6 +19,7 @@
     libFilter: 'all',
     libSearch: '',
     libView: 'flat',         // flat 平铺 | group 按科目·章节分组
+    libLimit: 150,           // 内容库分页渲染上限
     practiceSubject: null,   // 练习中心当前下钻的科目
     imgBrowseSub: null,      // 看图卡库：当前浏览的科目
     imgBrowseCh: null,       // 看图卡库：当前浏览的章节
@@ -1232,12 +1233,21 @@
       return;
     }
 
-    // 平铺视图
+    // 平铺视图（分页渲染，避免一次渲染上千条卡顿）
     if (list.length === 0) {
       el.innerHTML = `<div class="card" style="text-align:center;color:var(--text-3)">暂无匹配内容，点击右上角「＋」添加</div>`;
       return;
     }
-    el.innerHTML = list.map(itemHTML).join('');
+    const shown = list.slice(0, App.libLimit);
+    el.innerHTML = shown.map(itemHTML).join('');
+    if (list.length > App.libLimit) {
+      el.insertAdjacentHTML('beforeend',
+        `<div class="card lib-more" id="lib-more" style="text-align:center;color:var(--primary);font-weight:600;cursor:pointer">显示更多（还有 ${list.length - App.libLimit} 条）</div>`);
+      $('#lib-more').addEventListener('click', () => {
+        App.libLimit += 300;
+        renderLibrary();
+      });
+    }
   }
 
   function openNoteModal(id) {
