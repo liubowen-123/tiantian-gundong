@@ -2014,9 +2014,16 @@
   }
 
   /** 导入内置图片挖空卡（按图片路径去重，幂等；每次加载自动补全，可手动触发） */
+  const IMG_OSS_BASE = 'https://ttgd-images.oss-cn-hongkong.aliyuncs.com';
+
   function importBundled() {
     try {
       if (!window.TTBundledImageCards || !window.TTBundledImageCards.length) return;
+      // 清理旧版/失效图片地址的图卡（本地 127.0.0.1、相对路径等），避免残留破图
+      const stale = TTStore.getContent().filter(x =>
+        x.masks && x.masks.length && x.image && x.image.indexOf(IMG_OSS_BASE) !== 0
+      );
+      if (stale.length) TTStore.removeMany(stale.map(x => x.id));
       const existing = new Set(TTStore.getContent().map(c => c.image).filter(Boolean));
       const fresh = window.TTBundledImageCards.filter(c => !existing.has(c.image));
       if (fresh.length) {
