@@ -8,7 +8,8 @@
     log: 'ttgd.log.v1',
     lastDate: 'ttgd.lastDate.v1',
     exam: 'ttgd.exam.v1',
-    trash: 'ttgd.trash.v1'    // 回收站
+    trash: 'ttgd.trash.v1',    // 回收站
+    xp: 'ttgd.xp.v1'           // 经验值 / 成就
   };
 
   const DEFAULT_SETTINGS = {
@@ -408,6 +409,14 @@
       write(KEYS.exam, list);
     },
 
+    // ---- 经验值 / 成就 ----
+    getXp() {
+      return Object.assign({ xp: 0, badges: [], relearn: 0, lastDate: '' }, read(KEYS.xp, null) || {});
+    },
+    saveXp(s) {
+      write(KEYS.xp, s);
+    },
+
     // ---- 全部导出/导入 ----
     exportAll() {
       return JSON.stringify({
@@ -417,7 +426,8 @@
         settings: this.getSettings(),
         content: this.getContent(),
         log: this.getLog(),
-        trash: this.getTrash()
+        trash: this.getTrash(),
+        xp: this.getXp()
       }, null, 2);
     },
     importAll(jsonStr) {
@@ -427,6 +437,7 @@
       if (data.settings) write(KEYS.settings, data.settings);
       if (data.log) this.saveLog(data.log);
       if (Array.isArray(data.trash)) this.saveTrash(data.trash);
+      if (data.xp) write(KEYS.xp, data.xp);
       return data.content ? data.content.length : 0;
     },
 

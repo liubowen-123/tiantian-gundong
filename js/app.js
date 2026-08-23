@@ -620,6 +620,10 @@
   function startWrong() {
     const items = TTScheduler.wrongBook();
     if (items.length === 0) { toast('暂无错题，继续加油！'); return; }
+    const s = TTStore.getXp();
+    s.relearn++;
+    TTStore.saveXp(s);
+    addXp(3);
     beginQueue(items, 'wrong', 'practice', '错题重练完成！', () => false);
   }
 
@@ -718,6 +722,7 @@
             ? `<div class="feedback ok"><div class="fb-title">✓ 回答正确</div>${esc(it.explain || '')}</div>`
             : `<div class="feedback bad"><div class="fb-title">✗ 回答错误，正确答案 ${ansLetters(it.answer)}</div>${esc(it.explain || '')}</div>`;
           const r = TTScheduler.learnItem(it.id, correct ? 'ok' : 'wrong');
+          afterQuiz(correct);
           App.learnResults.push({ id: it.id, ok: correct, isNew: entry.isNew });
           actions.innerHTML = `<button class="btn-primary" id="btn-next">${App.learnIndex + 1 >= App.learnQueue.length ? '完成' : '下一题'}</button>`;
           $('#btn-next').addEventListener('click', () => { App.learnIndex++; App.learnBusy = false; renderLearn(); });
@@ -760,6 +765,7 @@
 
       const ok = correct ? 'ok' : 'wrong';
       const r = TTScheduler.learnItem(it.id, ok);
+      afterQuiz(correct);
       App.learnResults.push({ id: it.id, ok: correct, isNew: entry.isNew });
 
       actions.innerHTML = `
@@ -971,6 +977,7 @@
         if (App.learnBusy) return;
         App.learnBusy = true;
         TTScheduler.learnCard(it.id, b.dataset.r);
+        afterCard();
         App.learnResults.push({ id: it.id, ok: b.dataset.r !== 'again', isNew: entry.isNew });
         App.learnIndex++;
         App.learnBusy = false;
@@ -1198,6 +1205,7 @@
     ex.pct = pct;
     ex.seconds = Math.floor((Date.now() - ex.startAt) / 1000);
     TTStore.addExam({ date: TTStore.todayStr(), total, correct, pct, seconds: ex.seconds });
+    addXp(10 + (pct >= 90 ? 20 : pct >= 70 ? 10 : 0));
     renderExamResult();
   }
 
@@ -1445,6 +1453,90 @@
   }
 
   /* ================= 统计页 ================= */
+  /* ================= 游戏化：经验 / 等级 / 成就 ================= */
+  const BADGES = [
+    { id: 'first', icon: '🎉', name: '初出茅庐', desc: '完成第一次学习', test: () => Object.keys(TTStore.getLog()).length > 0 },
+    { id: 's3', icon: '🔥', name: '小有坚持', desc: '连续打卡 3 天', test: () => TTScheduler.streak() >= 3 },
+    { id: 's7', icon: '🌟', name: '习惯成自然', desc: '连续打卡 7 天', test: () => TTScheduler.streak() >= 7 },
+    { id: 's30', icon: '👑', name: '学霸养成', desc: '连续打卡 30 天', test: () => TTScheduler.streak() >= 30 },
+    { id: 'q100', icon: '💯', name: '百题斩', desc: '累计答对 100 题', test: () => totalCorrect() >= 100 },
+    { id: 'q1000', icon: '🚀', name: '千题斩', desc: '累计答对 1000 题', test: () => totalCorrect() >= 1000 },
+    { id: 'g1', icon: '🏆', name: '毕业达人', desc: '首次毕业 1 条', test: () => TTStore.getContent().filter(x => TTScheduler.isGraduated(x)).length >= 1 },
+    { id: 'g50', icon: '🎓', name: '学有所成', desc: '毕业 50 条', test: () => TTStore.getContent().filter(x => TTScheduler.isGraduated(x)).length >= 50 },
+    { id: 'exam1', icon: '📚', name: '真题勇士', desc: '完成 1 次整卷考试', test: () => TTStore.getExam().length >= 1 },
+    { id: 'img10', icon: '🧠', name: '看图大师', desc: '学习 10 张看图卡', test: () => imgReviews() >= 10 },
+    { id: 'rl10', icon: '🏅', name: '错题克星', desc: '错题重练 10 次', test: () => TTStore.getXp().relearn >= 10 }
+  ];
+
+  function totalCorrect() {
+    const log = TTStore.getLog();
+    let n = 0;
+    Object.keys(log).forEach(k => n += (log[k].correct || 0));
+    return n;
+  }
+  function imgReviews() {
+    return TTStore.getContent()
+      .filter(x => x.masks && x.masks.length)
+      .reduce((s, x) => s + (x.reviewCount || 0), 0);
+  }
+
+  function addXp(n) {
+    const s = TTStore.getXp();
+    s.xp += n;
+    TTStore.saveXp(s);
+    checkBadges();
+  }
+  /** 每日首次学习奖励 +5 经验 */
+  function studyBonus() {
+    const s = TTStore.getXp();
+    const today = TTStore.todayStr();
+    if (s.lastDate !== today) {
+      s.lastDate = today;
+      s.xp += 5;
+      TTStore.saveXp(s);
+      checkBadges();
+      toast('🔥 每日学习 +5 经验');
+    }
+  }
+  function afterQuiz(correct) {
+    addXp(correct ? 2 : 1);
+    studyBonus();
+  }
+  function afterCard() {
+    addXp(1);
+    studyBonus();
+  }
+  function checkBadges() {
+    try {
+      const s = TTStore.getXp();
+      const unlocked = new Set(s.badges);
+      let changed = false;
+      BADGES.forEach(b => {
+        if (!unlocked.has(b.id) && b.test()) {
+          unlocked.add(b.id);
+          changed = true;
+          unlockToast(b);
+        }
+      });
+      if (changed) { s.badges = Array.from(unlocked); TTStore.saveXp(s); }
+    } catch (e) { /* 忽略 */ }
+  }
+  function unlockToast(b) {
+    try {
+      const t = document.createElement('div');
+      t.className = 'unlock-toast';
+      t.innerHTML = `<span class="unlock-icon">${b.icon}</span><div><div class="unlock-name">🏆 解锁成就 · ${esc(b.name)}</div><div class="unlock-desc">${esc(b.desc)}</div></div>`;
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 3200);
+    } catch (e) { /* 忽略 */ }
+  }
+  function levelInfo() {
+    const xp = TTStore.getXp().xp;
+    const level = Math.floor(xp / 100) + 1;
+    const cur = xp % 100;
+    return { level, xp, cur, next: 100, pct: Math.round(cur / 100 * 100) };
+  }
+
   function renderStats() {
     const content = TTStore.getContent();
     const graduated = content.filter(x => TTScheduler.isGraduated(x)).length;
@@ -1491,6 +1583,27 @@
       html += `<div class="${cls}">${d.getDate()}</div>`;
     }
     cal.innerHTML = html;
+
+    // 等级与经验
+    const lv = levelInfo();
+    $('#xp-level').textContent = 'Lv.' + lv.level;
+    $('#xp-num').textContent = lv.cur + ' / ' + lv.next;
+    $('#xp-bar').style.width = lv.pct + '%';
+
+    // 成就徽章
+    const xpS = TTStore.getXp();
+    const unlockedSet = new Set(xpS.badges);
+    const grid = $('#badge-grid');
+    $('#badge-count').textContent = unlockedSet.size + ' / ' + BADGES.length;
+    grid.innerHTML = BADGES.map(b => {
+      const got = unlockedSet.has(b.id);
+      return `
+        <div class="badge-item ${got ? 'got' : ''}" title="${esc(b.desc)}">
+          <div class="badge-icon">${got ? b.icon : '🔒'}</div>
+          <div class="badge-name">${esc(b.name)}</div>
+          <div class="badge-desc">${got ? esc(b.desc) : '未解锁'}</div>
+        </div>`;
+    }).join('');
 
     // 各科掌握度
     renderMasteryList($('#subject-bars'), TTScheduler.subjectMastery());
