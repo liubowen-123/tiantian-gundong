@@ -273,8 +273,8 @@ html, body {
 .imgcard { position: relative; margin-top: 10px; cursor: pointer; }
 .imgcard-img { display: block; width: 100%; border-radius: 12px; }
 .imgcard-masks { position: absolute; inset: 0; pointer-events: none; }
-.img-mask { position: absolute; background: #fff; box-shadow: inset 0 0 0 1px rgba(47,143,107,.25); pointer-events: auto; cursor: pointer; transition: opacity .2s; }
-.img-mask.revealed { opacity: 0; pointer-events: none; }
+.img-mask { position: absolute; background: #fff; box-shadow: inset 0 0 0 1px rgba(47,143,107,.25); pointer-events: auto; cursor: pointer; transition: background .2s; }
+.img-mask.revealed { background: transparent; box-shadow: inset 0 0 0 1px rgba(47,143,107,.5); }
 .imgcard-hint { font-size: 12px; color: var(--text-3); text-align: center; margin-top: 10px; }
 
 /* 看图卡章节选择 */
@@ -945,6 +945,7 @@ html.dark .lib-group-count { background: #24352d; color: #a8bcb1; }
 html.dark .template-hint { background: #1a2a3a; color: #a8c6e8; }
 html.dark .year-chip { background: #101713; color: #a8bcb1; border-color: #24352d; }
 html.dark .img-mask { background: #26372f; box-shadow: inset 0 0 0 1px rgba(79, 192, 143, .4); }
+html.dark .img-mask.revealed { background: transparent; box-shadow: inset 0 0 0 1px rgba(79, 192, 143, .6); }
 html.dark .exam-wrong.ok { background: #123527; color: #7fd7ab; border-color: #2f8f6b; }
 html.dark .cal-day { background: #101713; color: #6e857a; }
 html.dark .cal-day.mid { background: #1d3a2e; color: #7fd7ab; }

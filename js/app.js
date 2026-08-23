@@ -853,9 +853,12 @@
     let revealed = false;
     const showRatings = () => { if (!revealed) { revealed = true; renderAnkiButtons(it); } };
     const allMasks = () => $$('#imgcard .img-mask');
-    // 每个空白可单独点击揭答案
+    // 每个空白可单独点击：再点一次可重新盖回
     allMasks().forEach(m => {
-      m.addEventListener('click', () => { m.classList.add('revealed'); showRatings(); });
+      m.addEventListener('click', () => {
+        m.classList.toggle('revealed');
+        if (m.classList.contains('revealed')) showRatings();
+      });
     });
     actions.innerHTML = `
       <div class="img-actions">
