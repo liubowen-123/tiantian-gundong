@@ -291,6 +291,9 @@ html, body {
 /* 看图卡库：科目 → 章节 → 挖空图 */
 .browse-tools { margin-bottom: 12px; }
 .browse-tools .btn-ghost { width: 100%; }
+.img-actions { display: flex; gap: 10px; }
+.img-actions .btn-ghost { flex: 1; }
+.img-actions .btn-primary { flex: 1; margin: 0; }
 .browse-back { font-size: 13px; color: var(--primary); font-weight: 600; padding: 8px 2px; cursor: pointer; border-bottom: 1px dashed var(--border); margin-bottom: 8px; }
 .subj-grid { display: flex; flex-direction: column; gap: 10px; }
 .subj-card {

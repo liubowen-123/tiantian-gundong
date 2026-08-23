@@ -852,14 +852,23 @@
     const actions = $('#card-actions');
     let revealed = false;
     const showRatings = () => { if (!revealed) { revealed = true; renderAnkiButtons(it); } };
+    const allMasks = () => $$('#imgcard .img-mask');
     // 每个空白可单独点击揭答案
-    $$('#imgcard .img-mask').forEach(m => {
+    allMasks().forEach(m => {
       m.addEventListener('click', () => { m.classList.add('revealed'); showRatings(); });
     });
-    actions.innerHTML = `<button class="btn-primary" id="btn-reveal-all">显示全部答案</button>`;
+    actions.innerHTML = `
+      <div class="img-actions">
+        <button class="btn-ghost" id="btn-cover-all">🎭 重新遮盖</button>
+        <button class="btn-primary" id="btn-reveal-all">显示全部答案</button>
+      </div>`;
     $('#btn-reveal-all').addEventListener('click', () => {
-      $$('#imgcard .img-mask').forEach(m => m.classList.add('revealed'));
+      allMasks().forEach(m => m.classList.add('revealed'));
       showRatings();
+    });
+    $('#btn-cover-all').addEventListener('click', () => {
+      // 重新盖住所有挖空，再测一遍
+      allMasks().forEach(m => m.classList.remove('revealed'));
     });
   }
 
