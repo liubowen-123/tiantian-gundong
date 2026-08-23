@@ -554,7 +554,7 @@
                 <div class="ch-name">${esc(c.chapter)}</div>
                 <div class="ch-count">${c.count} 张</div>
               </div>
-              <button class="btn-ghost ch-go" data-go="${esc(c.chapter)}">学习本章</button>
+              <button class="btn-ghost ch-grid" data-grid="${esc(c.chapter)}">🖼 网格</button>
             </div>`;
           }).join('')}
         </div>`;
@@ -596,12 +596,13 @@
       renderImageBrowse();
     }));
     $$('.ch-row').forEach(el => el.addEventListener('click', () => {
-      App.imgBrowseCh = el.dataset.ch;
-      renderImageBrowse();
+      // 点章节行 → 直接进入该章学习
+      startImageStudy([{ subject: App.imgBrowseSub, chapter: el.dataset.ch }]);
     }));
-    $$('.ch-go').forEach(btn => btn.addEventListener('click', e => {
+    $$('.ch-grid').forEach(btn => btn.addEventListener('click', e => {
       e.stopPropagation();
-      startImageStudy([{ subject: App.imgBrowseSub, chapter: btn.dataset.go }]);
+      App.imgBrowseCh = btn.dataset.grid;
+      renderImageBrowse();
     }));
     $$('.img-cell').forEach(el => el.addEventListener('click', () => {
       const card = TTStore.getById(el.dataset.id);
@@ -844,6 +845,7 @@
           <div class="imgcard-masks">${boxes}</div>
         </div>
         <div class="imgcard-hint">👆 点击空白处，查看对应答案</div>
+        <button class="btn-ghost img-zoom-btn" id="btn-zoom">🔍 放大图片</button>
       </div>
       <div class="learn-actions anki-actions" id="card-actions"></div>`;
   }
@@ -873,6 +875,57 @@
       // 重新盖住所有挖空，再测一遍
       allMasks().forEach(m => m.classList.remove('revealed'));
     });
+    const zbtn = $('#btn-zoom');
+    if (zbtn) zbtn.addEventListener('click', () => openZoomViewer(it));
+  }
+
+  /* ---------- 看图卡：全屏放大查看器（双指缩放/双击/拖动） ---------- */
+  function openZoomViewer(it) {
+    const boxes = it.masks.map(b =>
+      `<div class="img-mask" style="left:${(b[0] * 100).toFixed(3)}%;top:${(b[1] * 100).toFixed(3)}%;width:${(b[2] * 100).toFixed(3)}%;height:${(b[3] * 100).toFixed(3)}%"></div>`
+    ).join('');
+    const ov = document.createElement('div');
+    ov.className = 'zoom-overlay';
+    ov.innerHTML = `
+      <div class="zoom-stage" id="zoom-stage">
+        <img class="zoom-img" src="${esc(it.image)}" alt="放大">
+        <div class="imgcard-masks">${boxes}</div>
+      </div>
+      <div class="zoom-close" id="zoom-close">✕</div>
+      <div class="zoom-hint">双指缩放 · 双击放大 · 拖动平移</div>`;
+    document.body.appendChild(ov);
+    const stage = ov.querySelector('#zoom-stage');
+    let scale = 1, tx = 0, ty = 0;
+    let startDist = 0, startScale = 1, lastTouch = null, lastTap = 0;
+    const apply = () => { stage.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; };
+    ov.addEventListener('touchstart', e => {
+      if (e.touches.length === 2) {
+        startDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+        startScale = scale;
+        e.preventDefault();
+      } else if (e.touches.length === 1) {
+        lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        const now = Date.now();
+        if (now - lastTap < 300) {
+          if (scale > 1) { scale = 1; tx = 0; ty = 0; } else { scale = 2.2; tx = 0; ty = 0; }
+          apply(); lastTap = 0;
+        } else lastTap = now;
+      }
+    }, { passive: false });
+    ov.addEventListener('touchmove', e => {
+      if (e.touches.length === 2) {
+        const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+        scale = Math.min(5, Math.max(1, startScale * d / (startDist || 1)));
+        apply(); e.preventDefault();
+      } else if (e.touches.length === 1 && lastTouch) {
+        tx += e.touches[0].clientX - lastTouch.x;
+        ty += e.touches[0].clientY - lastTouch.y;
+        lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        apply();
+      }
+    }, { passive: false });
+    ov.addEventListener('touchend', () => { lastTouch = null; });
+    ov.querySelector('#zoom-close').addEventListener('click', () => ov.remove());
   }
 
   function renderAnkiButtons(it) {

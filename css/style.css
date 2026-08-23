@@ -294,6 +294,23 @@ html, body {
 .img-actions { display: flex; gap: 10px; }
 .img-actions .btn-ghost { flex: 1; }
 .img-actions .btn-primary { flex: 1; margin: 0; }
+
+/* 看图卡：放大查看器 */
+.img-zoom-btn { margin-top: 12px; width: 100%; }
+.zoom-overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, .93); z-index: 300;
+  display: flex; align-items: center; justify-content: center; touch-action: none;
+}
+.zoom-stage { position: relative; display: inline-block; transform-origin: center; will-change: transform; }
+.zoom-img { display: block; max-width: 94vw; max-height: 88vh; border-radius: 10px; }
+.zoom-overlay .imgcard-masks { position: absolute; inset: 0; pointer-events: none; }
+.zoom-overlay .img-mask { background: #fff; box-shadow: inset 0 0 0 1px rgba(47,143,107,.25); }
+.zoom-close {
+  position: fixed; top: 18px; right: 18px; width: 44px; height: 44px; border-radius: 50%;
+  background: rgba(255,255,255,.16); color: #fff; font-size: 22px; z-index: 301;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.zoom-hint { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,.75); font-size: 13px; z-index: 301; white-space: nowrap; }
 .browse-back { font-size: 13px; color: var(--primary); font-weight: 600; padding: 8px 2px; cursor: pointer; border-bottom: 1px dashed var(--border); margin-bottom: 8px; }
 .subj-grid { display: flex; flex-direction: column; gap: 10px; }
 .subj-card {
