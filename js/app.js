@@ -845,7 +845,11 @@
           <div class="imgcard-masks">${boxes}</div>
         </div>
         <div class="imgcard-hint">👆 点击空白处，查看对应答案</div>
-        <button class="btn-ghost img-zoom-btn" id="btn-zoom">🔍 放大图片</button>
+        <div class="img-actions img-toolbar">
+          <button class="btn-ghost" id="btn-zoom">🔍 放大</button>
+          <button class="btn-ghost" id="btn-cover-all">🎭 重新遮盖</button>
+          <button class="btn-primary" id="btn-reveal-all">显示全部答案</button>
+        </div>
       </div>
       <div class="learn-actions anki-actions" id="card-actions"></div>`;
   }
@@ -862,11 +866,7 @@
         if (m.classList.contains('revealed')) showRatings();
       });
     });
-    actions.innerHTML = `
-      <div class="img-actions">
-        <button class="btn-ghost" id="btn-cover-all">🎭 重新遮盖</button>
-        <button class="btn-primary" id="btn-reveal-all">显示全部答案</button>
-      </div>`;
+    // 常驻工具栏（不随评级按钮消失）
     $('#btn-reveal-all').addEventListener('click', () => {
       allMasks().forEach(m => m.classList.add('revealed'));
       showRatings();
@@ -875,8 +875,7 @@
       // 重新盖住所有挖空，再测一遍
       allMasks().forEach(m => m.classList.remove('revealed'));
     });
-    const zbtn = $('#btn-zoom');
-    if (zbtn) zbtn.addEventListener('click', () => openZoomViewer(it));
+    $('#btn-zoom').addEventListener('click', () => openZoomViewer(it));
   }
 
   /* ---------- 看图卡：全屏放大查看器（双指缩放/双击/拖动） ---------- */

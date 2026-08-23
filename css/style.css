@@ -296,7 +296,8 @@ html, body {
 .img-actions .btn-primary { flex: 1; margin: 0; }
 
 /* 看图卡：放大查看器 */
-.img-zoom-btn { margin-top: 12px; width: 100%; }
+.img-toolbar { margin-top: 12px; }
+.img-toolbar .btn-ghost, .img-toolbar .btn-primary { font-size: 13px; padding: 10px 0; }
 .zoom-overlay {
   position: fixed; inset: 0; background: rgba(0, 0, 0, .93); z-index: 300;
   display: flex; align-items: center; justify-content: center; touch-action: none;
