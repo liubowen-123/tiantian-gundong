@@ -1,0 +1,14 @@
+{
+  "name": "天天滚动 · 西综考研复习",
+  "short_name": "天天滚动",
+  "description": "西综考研：艾宾浩斯滚动复习 + Anki 记忆卡 + 历年真题刷题",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f2f6f4",
+  "theme_color": "#2f8f6b",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

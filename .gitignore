@@ -1,0 +1,11 @@
+# 大文件 / 原始数据（不入库）
+images/
+*.apkg
+*.anki2
+导入_图像卡.json
+导入_卡组_*.json
+_tmp/
+
+# 系统
+Thumbs.db
+.DS_Store

@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>天天滚动 · 西综艾宾浩斯复习</title>
+<meta name="theme-color" content="#2f8f6b">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- 今日页（任务看板） -->
+  <section class="page" id="page-today">
+    <header class="page-header">
+      <div class="header-top">
+        <div>
+          <h1 class="app-title">天天滚动</h1>
+          <p class="app-subtitle">西综考研 · 艾宾浩斯滚动复习</p>
+        </div>
+        <button class="icon-btn" id="btn-settings" title="设置">⚙</button>
+      </div>
+      <div class="streak-banner" id="streak-banner"></div>
+    </header>
+
+    <div class="today-body">
+      <!-- 本阶段目标 + 滚动进度 -->
+      <div class="card goal-card">
+        <div class="goal-head">
+          <div>
+            <div class="goal-tag">本阶段目标</div>
+            <div class="goal-subject" id="goal-subject">--</div>
+          </div>
+          <button class="mini-round-btn" id="btn-plan" title="跳转练习中心">计划 ›</button>
+        </div>
+        <div class="goal-scroll">
+          <div class="goal-scroll-ring">
+            <svg class="ring" viewBox="0 0 120 120">
+              <circle class="ring-bg small" cx="60" cy="60" r="52"></circle>
+              <circle class="ring-fg small" id="goal-ring-fg" cx="60" cy="60" r="52"></circle>
+            </svg>
+            <div class="goal-scroll-pct" id="goal-pct">0%</div>
+          </div>
+          <div class="goal-scroll-info">
+            <div class="goal-scroll-title">当前滚动进度</div>
+            <div class="goal-scroll-sub" id="goal-scroll-info">今日 0 张 · 明日到期 0 张</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 以题带动·每日记录 -->
+      <div class="card record-card">
+        <div class="record-main">
+          <div class="record-title">以题带动 · 每日记录</div>
+          <div class="record-sub"><span id="rec-today">今日 0 题</span> · <span id="rec-days">已记录 0 天</span></div>
+        </div>
+        <div class="record-arrow">›</div>
+      </div>
+
+      <!-- 学习模式 -->
+      <div class="seg mode-seg" id="mode-seg">
+        <button class="seg-btn active" data-mode="all">全部</button>
+        <button class="seg-btn" data-mode="quiz">只刷题</button>
+        <button class="seg-btn" data-mode="card">只Anki</button>
+      </div>
+      <button class="btn-primary" id="btn-start">开始今日学习</button>
+
+      <!-- 三段任务 -->
+      <div class="card task-card">
+        <div class="card-title">今日任务</div>
+        <div class="task-list" id="task-list"></div>
+      </div>
+
+      <!-- 今日队列预览 -->
+      <div class="card today-preview">
+        <div class="card-title-row">
+          <span class="card-title">今日队列</span>
+          <span class="card-sub" id="today-date"></span>
+        </div>
+        <div class="queue-list" id="today-queue"></div>
+      </div>
+
+      <!-- 五科掌握度 -->
+      <div class="card mastery-card">
+        <div class="card-title-row">
+          <span class="card-title">各科掌握度</span>
+          <span class="card-sub" id="mastery-total"></span>
+        </div>
+        <div class="mastery-list" id="mastery-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 练习中心页 -->
+  <section class="page hidden" id="page-practice">
+    <header class="page-header">
+      <h1 class="app-title">练习中心</h1>
+    </header>
+
+    <div class="practice-body">
+      <!-- 以题带动·每日记录 -->
+      <div class="card record-hero" id="entry-record">
+        <div class="record-main">
+          <div class="record-hero-title">以题带动 · 每日记录</div>
+          <div class="record-hero-sub" id="p-rec-info">今日 0 题 · 已记录 0 天</div>
+        </div>
+        <div class="record-arrow">›</div>
+      </div>
+
+      <!-- 入口列表 -->
+      <div class="entry-list">
+        <div class="practice-entry" id="entry-exam" role="button">
+          <div class="pe-icon" style="background:#eef2ff">📋</div>
+          <div class="pe-main">
+            <div class="pe-title">开始整卷考试</div>
+            <div class="pe-desc">选择题目数量，进入限时正式考试</div>
+          </div>
+          <div class="pe-action">选择试卷 ›</div>
+        </div>
+
+        <div class="practice-entry" id="entry-wrong" role="button">
+          <div class="pe-icon" style="background:#fef2f2">📕</div>
+          <div class="pe-main">
+            <div class="pe-title">错题本</div>
+            <div class="pe-desc" id="wrong-desc">0 项待巩固</div>
+          </div>
+          <div class="pe-action">›</div>
+        </div>
+
+        <div class="practice-entry" id="entry-search" role="button">
+          <div class="pe-icon" style="background:#ecfdf5">🔍</div>
+          <div class="pe-main">
+            <div class="pe-title">搜索、收藏与笔记</div>
+            <div class="pe-desc">在题目和知识卡中快速定位、收藏、做笔记</div>
+          </div>
+          <div class="pe-action">›</div>
+        </div>
+
+        <div class="practice-entry" id="entry-img" role="button">
+          <div class="pe-icon" style="background:#fff7ed">🖼</div>
+          <div class="pe-main">
+            <div class="pe-title">看图挖空卡</div>
+            <div class="pe-desc" id="img-desc">0 张待学</div>
+          </div>
+          <div class="pe-action">开始 ›</div>
+        </div>
+
+        <div class="practice-entry" id="entry-qbank" role="button">
+          <div class="pe-icon" style="background:#eff6ff">📖</div>
+          <div class="pe-main">
+            <div class="pe-title">真题题库（文字选择题）</div>
+            <div class="pe-desc" id="qbank-desc">306 西综真题 · 按科目导入</div>
+          </div>
+          <div class="pe-action">›</div>
+        </div>
+
+        <div class="practice-entry" id="entry-year" role="button">
+          <div class="pe-icon" style="background:#faf5ff">📅</div>
+          <div class="pe-main">
+            <div class="pe-title">按年份刷题</div>
+            <div class="pe-desc">选年份，刷对应真题（单选 + 多选）</div>
+          </div>
+          <div class="pe-action">›</div>
+        </div>
+      </div>
+
+      <!-- 按章节练习 -->
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">按章节练习</span>
+          <span class="card-sub" id="p-sub-all">共 0 题</span>
+        </div>
+        <div class="subj-practice" id="subj-practice"></div>
+      </div>
+
+      <!-- 近期考试记录 -->
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">考试记录</span>
+        </div>
+        <div class="exam-history" id="exam-history"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 学习页 -->
+  <section class="page hidden" id="page-learn">
+    <header class="page-header learn-header">
+      <button class="icon-btn" id="btn-exit-learn">✕</button>
+      <div class="learn-progress">
+        <div class="learn-progress-bar" id="learn-progress-bar"></div>
+      </div>
+      <span class="learn-count" id="learn-count">1/10</span>
+      <span class="exam-timer hidden" id="exam-timer"></span>
+    </header>
+
+    <div class="learn-body" id="learn-body"></div>
+  </section>
+
+  <!-- 内容库页 -->
+  <section class="page hidden" id="page-library">
+    <header class="page-header">
+      <div class="header-top">
+        <h1 class="app-title">内容库</h1>
+        <div class="header-actions">
+          <button class="icon-btn" id="btn-anki" title="导入 Anki">🧠</button>
+          <button class="icon-btn" id="btn-csv" title="导入题库(CSV)">📚</button>
+          <button class="icon-btn" id="btn-import" title="导入">⇪</button>
+          <button class="icon-btn" id="btn-export" title="导出">⇩</button>
+          <button class="icon-btn" id="btn-add" title="添加">＋</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="lib-toolbar">
+      <input class="form-input lib-search" id="lib-search" placeholder="🔍 搜索题目 / 知识点 / 笔记" autocomplete="off">
+      <div class="seg" id="lib-type-seg">
+        <button class="seg-btn active" data-type="all">全部</button>
+        <button class="seg-btn" data-type="quiz">选择题</button>
+        <button class="seg-btn" data-type="card">记忆卡</button>
+        <button class="seg-btn" data-type="graduated">已毕业</button>
+        <button class="seg-btn" data-type="fav">⭐收藏</button>
+      </div>
+      <div class="seg lib-view-seg" id="lib-view-seg">
+        <button class="seg-btn active" data-view="flat">平铺列表</button>
+        <button class="seg-btn" data-view="group">按科目·章节分组</button>
+      </div>
+      <div class="lib-count" id="lib-count"></div>
+    </div>
+
+    <div class="lib-list" id="lib-list"></div>
+    <p class="lib-tip">示例内容仅作演示，可在「＋」中录入你自己的西综考点。</p>
+  </section>
+
+  <!-- 统计页 -->
+  <section class="page hidden" id="page-stats">
+    <header class="page-header">
+      <h1 class="app-title">统计</h1>
+    </header>
+    <div class="stats-body">
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-num" id="s-total">0</div><div class="stat-label">累计学习条目</div></div>
+        <div class="stat-card"><div class="stat-num" id="s-graduated">0</div><div class="stat-label">已毕业</div></div>
+        <div class="stat-card"><div class="stat-num" id="s-accuracy">--</div><div class="stat-label">总正确率</div></div>
+        <div class="stat-card"><div class="stat-num" id="s-streak">0</div><div class="stat-label">连续打卡(天)</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">近 30 天打卡</div>
+        <div class="calendar" id="calendar"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">各科掌握度</div>
+        <div class="mastery-list" id="subject-bars"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 底部导航 -->
+  <nav class="tabbar">
+    <button class="tab active" data-tab="today">
+      <span class="tab-icon">📅</span><span class="tab-label">今日</span>
+    </button>
+    <button class="tab" data-tab="practice">
+      <span class="tab-icon">🎯</span><span class="tab-label">练习</span>
+    </button>
+    <button class="tab" data-tab="learn">
+      <span class="tab-icon">📖</span><span class="tab-label">学习</span>
+    </button>
+    <button class="tab" data-tab="library">
+      <span class="tab-icon">🗂</span><span class="tab-label">内容库</span>
+    </button>
+    <button class="tab" data-tab="stats">
+      <span class="tab-icon">📊</span><span class="tab-label">统计</span>
+    </button>
+  </nav>
+
+  <!-- 模态框容器 -->
+  <div class="modal-mask hidden" id="modal-mask"></div>
+</div>
+
+<script src="js/storage.js"></script>
+<script src="js/scheduler.js"></script>
+<script src="js/anki.js"></script>
+<script src="js/data.js"></script>
+<script src="js/bundled_imagecards.js"></script>
+<script src="js/bundled_questions.js"></script>
+<script src="js/app.js"></script>
+<script>
+// PWA：注册 Service Worker（离线缓存 + 可安装）
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function (e) {
+      console.warn('Service Worker 注册失败', e);
+    });
+  });
+}
+</script>
+</body>
+</html>
