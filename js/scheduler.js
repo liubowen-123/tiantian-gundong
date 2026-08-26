@@ -18,6 +18,7 @@
   function typeOk(x, mode) {
     if (mode === 'quiz') return x.type === 'quiz';
     if (mode === 'card') return x.type === 'card';
+    if (mode === 'wrong') return true;
     return true;
   }
 
@@ -44,7 +45,7 @@
         if (isCard(x)) {
           return x.anki && !x.anki.suspended &&
             x.anki.state !== 'new' &&
-            x.anki.due && x.anki.due <= now &&
+            x.anki.due != null && x.anki.due <= now &&
             !(x.anki.interval >= 365);
         }
         return false;
@@ -81,7 +82,13 @@
       return { due: orderedDue, fresh, total: orderedDue.length + fresh.length };
     },
 
-    /** 今日答错待重刷条目。mode: all|quiz|card */
+    /** 错题优先队列：仅今日错题。mode: all|quiz|card|wrong */
+    wrongTodayQueue(mode) {
+      const wrong = this.wrongItemsToday(mode);
+      return { due: wrong, fresh: [], total: wrong.length };
+    },
+
+    /** 今日答错待重刷条目。mode: all|quiz|card|wrong */
     wrongItemsToday(mode) {
       const today = todayStr();
       const now = Date.now();
@@ -94,7 +101,7 @@
         if (isCard(x)) {
           return x.anki && !x.anki.suspended &&
             x.lastReviewDate === today && x.lastResult === 'wrong' &&
-            x.anki.due && x.anki.due <= now;
+            x.anki.due != null && x.anki.due <= now;
         }
         return false;
       });
@@ -402,8 +409,10 @@
       return TTStore.getContent()
         .filter(x => isQuiz(x) && (!has || years.indexOf(x.year) >= 0))
         .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-    }
-  };
+    },
+
+
+    };
 
   window.TTScheduler = Scheduler;
 })();

@@ -18,7 +18,8 @@
     theme: 'green',
     themeMode: 'auto',     // auto | light | dark
     examMinutes: 180,      // 整卷考试时长（分钟）
-    examCount: 20          // 整卷考试的题目数量（从题库随机抽取）
+    examCount: 20,         // 整卷考试的题目数量（从题库随机抽取）
+    notifyReminder: true, // 每日学习提醒
   };
 
   function uid() {
@@ -160,7 +161,7 @@
         chapter = '';
         question = (row[1] || '').trim();
         options = [row[2], row[3], row[4], row[5]].map(x => (x || '').trim());
-        answer = parseAnswer(row[6]);
+        answer = row[6] != null ? parseAnswer(row[6]) : 0;
         explain = (row[7] || '').trim();
       }
       if (!question) { errors.push('第 ' + lineNo + ' 行缺少题干/问题，已跳过'); return; }

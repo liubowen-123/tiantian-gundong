@@ -51,8 +51,8 @@
     if (item.type !== 'card') return item;
     if (!item.anki) {
       const a = defaultAnki();
-      // 旧数据迁移：之前用艾宾浩斯 stage 的卡片
-      if (item.stage >= 0) {
+      // 旧数据迁移：之前用艾宾浩斯 stage 的卡片（排除已毕业的）
+      if (item.stage >= 0 && !item.graduated) {
         a.state = 'review';
         a.interval = 1; // 保守起步
         a.due = item.nextReview ? new Date(item.nextReview + 'T09:00:00').getTime() : Date.now();

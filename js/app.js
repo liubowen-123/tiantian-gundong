@@ -215,6 +215,13 @@
 
   /* ================= 练习中心 ================= */
   function renderPractice() {
+    // 异步加载题库，如果尚未加载则先显示加载状态，加载完成后自动刷新
+    var qbankLoaded = window.TTBundledQuestionBank ? true : false;
+    if (!qbankLoaded) {
+      ensureBundledQuestions().then(function () {
+        renderPractice();
+      });
+    }
     const rec = TTScheduler.dailyRecord();
     $('#p-rec-info').textContent = `今日 ${rec.todayCount} 题 · 已记录 ${rec.recordedDays} 天`;
 
@@ -224,10 +231,15 @@
     const imgs = TTScheduler.imageCards();
     $('#img-desc').textContent = imgs.length > 0 ? `${imgs.length} 张图片挖空卡` : '0 张待学';
 
-    const bank = window.TTBundledQuestionBank || {};
-    const bankTotal = Object.keys(bank).reduce((s, k) => s + bank[k].length, 0);
-    const imp = qbankImported();
-    $('#qbank-desc').textContent = (imp.length ? '已导入 ' + imp.length + ' 科 · ' : '') + bankTotal + ' 题可选';
+    var bankTotal = 0;
+    if (qbankLoaded) {
+      const bank = window.TTBundledQuestionBank || {};
+      bankTotal = Object.keys(bank).reduce(function (s, k) { return s + bank[k].length; }, 0);
+      const imp = qbankImported();
+      $('#qbank-desc').textContent = (imp.length ? '已导入' + imp.length + ' 科· ' : '') + bankTotal + ' 题可选';
+    } else {
+      $('#qbank-desc').textContent = '题库加载中...';
+    }
 
     // 按章节练习（两级下钻：科目 → 章节）
     const ps = App.practiceSubject;
@@ -1189,11 +1201,8 @@
       else {
         ex.wrong.push({ item: it, chosen: ans, correct: it.answer });
         if (ans != null) {
-          TTStore.updateContent(it.id, {
-            wrongCount: (it.wrongCount || 0) + 1,
-            lastResult: 'wrong',
-            lastReviewDate: TTStore.todayStr()
-          });
+          // 调用调度引擎让错题进入艾宾浩斯重刷队列
+          TTScheduler.learnItem(it.id, 'wrong');
         }
       }
     });
@@ -2500,13 +2509,11 @@
     }
   }
 
-  /** 移除初始示例题（按题干精确匹配，幂等；只删最初生成的 22 条） */
+  /** 移除初始示例题（按 _sample 标记，幂等；只删最初生成的 22 条） */
   function removeSamples() {
     try {
-      const qs = (window.TTSeed && TTSeed.SAMPLE_QUESTIONS) || [];
-      if (!qs.length) return;
       const list = TTStore.getContent();
-      const toRemove = list.filter(x => qs.indexOf(x.question) >= 0).map(x => x.id);
+      const toRemove = list.filter(x => x._sample).map(x => x.id);
       if (toRemove.length) {
         toRemove.forEach(id => TTStore.removeContent(id));
         console.log('已移除初始示例题 ' + toRemove.length + ' 条');
@@ -2538,11 +2545,54 @@
     }
   }
 
+
+
+  /** 动态加载 JS 脚本，返回 Promise */
+  function loadScript(src) {
+    return new Promise(function(resolve, reject) {
+      var s = document.createElement('script');
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = function() { reject(new Error('加载失败: ' + src)); };
+      document.body.appendChild(s);
+    });
+  }
+
+  /** 确保题库（bundled_questions.js）已加载，未加载则动态加载 */
+  var _qbankLoading = null;
+  function ensureBundledQuestions() {
+    if (window.TTBundledQuestionBank) return Promise.resolve();
+    if (_qbankLoading) return _qbankLoading;
+    _qbankLoading = loadScript('js/bundled_questions.js').then(function() {
+      _qbankLoading = null;
+      try { renderPractice(); } catch(e) {}
+    }).catch(function(err) {
+      console.warn('题库加载失败，2秒后重试', err);
+      _qbankLoading = null;
+      // 2秒后自动重试
+      setTimeout(function() { ensureBundledQuestions(); }, 2000);
+    });
+    return _qbankLoading;
+  }
+
+  // 延迟加载图片挖空卡（不阻塞首屏渲染）
+  function lazyLoadImageCards() {
+    if (window.TTBundledImageCards) {
+      importBundled();
+      return;
+    }
+    loadScript('js/bundled_imagecards.js').then(function() {
+      importBundled();
+    }).catch(function(e) {
+      console.warn('图片挖空卡延迟加载失败', e);
+    });
+  }
+
   // 暴露给 onclick 使用
   window.TTApp = {
     goToday: () => switchTab('today'),
     goPractice: () => switchTab('practice')
   };
 
-  document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('DOMContentLoaded', function() { init(); setTimeout(lazyLoadImageCards, 100); });
 })();

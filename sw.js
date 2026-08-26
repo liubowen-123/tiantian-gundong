@@ -1,6 +1,6 @@
-/* 天天滚动 · Service Worker（PWA 离线缓存） */
-const CACHE = 'ttgd-v1';
-const IMG_CACHE = 'ttgd-img-v1';
+﻿/* 天天滚动 · Service Worker（PWA 离线缓存） */
+const CACHE = 'ttgd-v2';
+const IMG_CACHE = 'ttgd-img-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -10,8 +10,8 @@ const ASSETS = [
   './js/scheduler.js',
   './js/anki.js',
   './js/data.js',
-  './js/bundled_imagecards.js',
   './js/bundled_questions.js',
+  './js/bundled_imagecards.js',
   './js/app.js',
   './icons/icon-192.png',
   './icons/icon-512.png'

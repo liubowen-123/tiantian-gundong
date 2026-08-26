@@ -1,4 +1,4 @@
-/* ===== 天天滚动 · 西综艾宾浩斯复习 ===== */
+﻿/* ===== 天天滚动 · 西综艾宾浩斯复习 ===== */
 :root {
   --primary: #2f8f6b;
   --primary-dark: #247a59;
@@ -1020,3 +1020,16 @@ html.dark .toast { background: rgba(8, 12, 10, .94); }
 html.dark .flashcard-hint { color: #6e857a; }
 html.dark .lib-group-chapter-title { background: #1d3a2e; }
 html.dark .mastery-name, html.dark .sub-bar-name { color: #a8bcb1; }
+
+/* 学习实时计时器 */
+.learn-timer {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-2);
+  white-space: nowrap;
+  min-width: 70px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.learn-timer.running { color: var(--primary-dark); }
+html.dark .learn-timer.running { color: #7fd7ab; }

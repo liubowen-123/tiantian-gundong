@@ -40,10 +40,10 @@
       { type: 'card', subject: '诊断学', chapter: '常见症状', question: '稽留热、弛张热、间歇热各见于哪些疾病？', explain: '稽留热：大叶性肺炎、伤寒高热期；弛张热：败血症、风湿热；间歇热：疟疾、急性肾盂肾炎。' },
     ];
 
-    // 打上创建时间，保证入库顺序稳定
+    // 打上创建时间，保证入库顺序稳定；标记 _sample 供 removeSamples 识别
     const base = Date.now() - list.length * 60000;
     return list.map((item, i) => {
-      const s = TTStore.addContent(item);
+      const s = TTStore.addContent(Object.assign({ _sample: true }, item));
       TTStore.updateContent(s.id, { createdAt: base + i * 60000 });
       return s;
     });
