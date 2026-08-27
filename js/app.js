@@ -147,12 +147,12 @@
     $('#rec-days').textContent = `已记录 ${rec.recordedDays} 天`;
 
     // 学习模式
-    $('#mode-seg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === App.learnMode));
+    $$('#mode-seg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === App.learnMode));
 
     // 开始按钮
     const btn = $('#btn-start');
     btn.disabled = modeQ.total === 0;
-    const modeName = App.learnMode === 'quiz' ? '刷题' : App.learnMode === 'card' ? 'Anki 复习' : '学习';
+    const modeName = App.learnMode === 'quiz' ? '刷题' : App.learnMode === 'card' ? 'Anki 复习' : App.learnMode === 'wrong' ? '错题重练' : '学习';
     btn.textContent = modeQ.total === 0
       ? (App.learnMode === 'all' && settings.dailyNew === 0 ? '今日任务已完成 🎉' : '当前模式今日无任务')
       : `开始${modeName}（${modeQ.total} 项）`;
@@ -311,56 +311,56 @@
     App.learnBackTo = backTo || 'today';
     App.learnTitle = title || '今日学习完成！';
     App.learnSessionStart = Date.now();
+    startLearnTimer();
     switchTab('learn');
     renderLearn();
   }
 
   function startLearning(mode) {
     const m = mode || App.learnMode;
-    if (m === "wrong") {
-      const q = TTScheduler.wrongTodayQueue("all");
-      if (q.total === 0) { toast("今日暂无错题需要重刷"); return; }
-      showStartPreview(q, "wrong");
+    if (m === 'wrong') {
+      const q = TTScheduler.wrongTodayQueue('all');
+      if (q.total === 0) { toast('今日暂无错题需要重刷'); return; }
+      showStartPreview(q, 'wrong');
       return;
     }
     const q = TTScheduler.todayQueue(m);
-    if (q.total === 0) { toast("当前模式今日暂无任务"); return; }
+    if (q.total === 0) { toast('当前模式今日暂无任务'); return; }
     showStartPreview(q, m);
   }
 
   function showStartPreview(q, m) {
-    const modeName = m === "quiz" ? "刷题" : m === "card" ? "Anki 复习" : m === "wrong" ? "错题重练" : "学习";
+    const modeName = m === 'quiz' ? '刷题' : m === 'card' ? 'Anki 复习' : m === 'wrong' ? '错题重练' : '学习';
     const dueCount = q.due.length;
     const freshCount = q.fresh.length;
     openModal(`
       <div class="modal-title">开始${modeName}</div>
       <div class="start-preview">
         <div class="sp-row"><span class="sp-label">今日复习</span><span class="sp-num">${dueCount} 项</span></div>
-        ${freshCount > 0 ? `<div class="sp-row"><span class="sp-label">今日新学</span><span class="sp-num">${freshCount} 项</span></div>` : ""}
+        ${freshCount > 0 ? `<div class="sp-row"><span class="sp-label">今日新学</span><span class="sp-num">${freshCount} 项</span></div>` : ''}
         <div class="sp-row sp-total"><span class="sp-label">共计</span><span class="sp-num">${q.total} 项</span></div>
-        ${m === "wrong" ? `<div class="sp-tip">错题优先出现，答错会再次安排重刷</div>` : ""}
+        ${m === 'wrong' ? `<div class="sp-tip">错题优先出现，答错会再次安排重刷</div>` : ''}
       </div>
       <div class="modal-actions">
         <button class="btn-cancel" id="sp-cancel">取消</button>
         <button class="btn-primary" id="sp-go">开始学习</button>
       </div>
     `);
-    document.getElementById("sp-cancel").addEventListener("click", closeModal);
-    document.getElementById("sp-go").addEventListener("click", () => {
+    document.getElementById('sp-cancel').addEventListener('click', closeModal);
+    document.getElementById('sp-go').addEventListener('click', () => {
       closeModal();
       App.learnMode = m;
-      const title = m === "quiz" ? "刷题完成！" : m === "card" ? "Anki 复习完成！" : m === "wrong" ? "错题重练完成！" : "今日学习完成！";
-      const source = m === "wrong" ? "wrong" : "today";
-      const backTo = m === "wrong" ? "today" : "today";
-      beginQueue([...q.due, ...q.fresh], source, backTo, title, isNewItem);
+      const title = m === 'quiz' ? '刷题完成！' : m === 'card' ? 'Anki 复习完成！' : m === 'wrong' ? '错题重练完成！' : '今日学习完成！';
+      const source = m === 'wrong' ? 'wrong' : 'today';
+      beginQueue([...q.due, ...q.fresh], source, 'today', title, isNewItem);
     });
   }
 
   /* ---------- 学习实时计时器 ---------- */
   function startLearnTimer() {
     stopLearnTimer();
-    const el = document.getElementById("learn-timer");
-    if (el) el.classList.remove("hidden");
+    const el = document.getElementById('learn-timer');
+    if (el) el.classList.remove('hidden');
     updateLearnTimer();
     App.learnTimerInterval = setInterval(updateLearnTimer, 1000);
   }
@@ -370,15 +370,40 @@
       clearInterval(App.learnTimerInterval);
       App.learnTimerInterval = null;
     }
-    const el = document.getElementById("learn-timer");
-    if (el) el.classList.add("hidden");
+    const el = document.getElementById('learn-timer');
+    if (el) el.classList.add('hidden');
   }
 
   function updateLearnTimer() {
-    const el = document.getElementById("learn-timer");
+    const el = document.getElementById('learn-timer');
     if (!el || !App.learnSessionStart) return;
     const elapsed = Math.floor((Date.now() - App.learnSessionStart) / 1000);
-    el.textContent = "⏱ " + fmtClock(elapsed * 1000);
+    el.textContent = '⏱ ' + fmtClock(elapsed * 1000);
+  }
+
+  /* ---------- 学习实时计时器 ---------- */
+  function startLearnTimer() {
+    stopLearnTimer();
+    const el = document.getElementById('learn-timer');
+    if (el) el.classList.remove('hidden');
+    updateLearnTimer();
+    App.learnTimerInterval = setInterval(updateLearnTimer, 1000);
+  }
+
+  function stopLearnTimer() {
+    if (App.learnTimerInterval) {
+      clearInterval(App.learnTimerInterval);
+      App.learnTimerInterval = null;
+    }
+    const el = document.getElementById('learn-timer');
+    if (el) el.classList.add('hidden');
+  }
+
+  function updateLearnTimer() {
+    const el = document.getElementById('learn-timer');
+    if (!el || !App.learnSessionStart) return;
+    const elapsed = Math.floor((Date.now() - App.learnSessionStart) / 1000);
+    el.textContent = '\u23F1 ' + fmtClock(elapsed * 1000);
   }
 
   function startSubject(subject) {
@@ -726,6 +751,7 @@
     $('#learn-count').textContent = (App.learnIndex + 1) + '/' + total;
     $('#learn-progress-bar').style.width = (App.learnIndex / total * 100) + '%';
     hideExamTimer();
+    updateLearnTimer();
 
     const body = $('#learn-body');
     if (it.type === 'quiz') {
@@ -1062,6 +1088,7 @@
       const elapsed = Math.round((Date.now() - App.learnSessionStart) / 1000);
       if (elapsed > 10) {
         TTStore.logDay(TTStore.todayStr(), { seconds: elapsed });
+        App.lastSessionSeconds = elapsed;
       }
       App.learnSessionStart = null;
       stopLearnTimer();
@@ -1079,7 +1106,7 @@
       <div class="learn-done">
         <div class="done-icon">${confetti}</div>
         <div class="done-title">${esc(App.learnTitle)}</div>
-        <div class="done-desc">共完成 ${total} 项，答对 ${okCount} 项${okCount < total ? '，答错的已安排稍后重刷' : ''}。<br>错题会自动加入错题本，按记忆曲线继续滚动。</div>
+        <div class="done-desc">共完成 ${total} 项，答对 ${okCount} 项${okCount < total ? '，答错的已安排稍后重刷' : ''}。<br>${App.lastSessionSeconds ? '本次学习用时 ' + fmtClock(App.lastSessionSeconds * 1000) + '。<br>' : ''}错题会自动加入错题本，按记忆曲线继续滚动。</div>
         <button class="btn-primary" id="btn-done-again" style="margin-bottom:10px">再学一轮错题</button>
         <button class="btn-ghost" id="btn-done-home" style="width:100%">${backLabel}</button>
       </div>`;
@@ -1497,26 +1524,23 @@
   }
 
   /* ================= 错题本 ================= */
-
   /* ---------- 以题带动 · 每日记录面板 ---------- */
   function openDailyRecord() {
     const rec = TTScheduler.dailyRecord();
     const log = TTStore.getLog();
-    const today = TTStore.todayStr();
-    // Build 7-day mini chart data
     const days = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date(); d.setDate(d.getDate() - i);
       const ds = TTStore.todayStr(d);
       const entry = log[ds] || { review: 0, correct: 0, wrong: 0, newLearned: 0 };
-      days.push({ date: ds, count: (entry.review || 0) + (entry.newLearned || 0), label: (d.getMonth()+1) + "/" + d.getDate() });
+      days.push({ date: ds, count: (entry.review || 0) + (entry.newLearned || 0), label: (d.getMonth()+1) + '/' + d.getDate() });
     }
     const maxCount = Math.max(...days.map(d => d.count), 1);
     const barsHtml = days.map(d => `
       <div class="dr-bar-col">
         <div class="dr-bar" style="height:${Math.round(d.count / maxCount * 60)}px"></div>
         <div class="dr-bar-label">${d.label}</div>
-      </div>`).join("");
+      </div>`).join('');
 
     openModal(`
       <div class="modal-title">以题带动 · 每日记录</div>
@@ -1530,7 +1554,7 @@
         <button class="btn-primary" id="dr-start" style="flex:1">开始今日学习</button>
       </div>
     `);
-    document.getElementById("dr-start").addEventListener("click", () => { closeModal(); switchTab("today"); });
+    document.getElementById('dr-start').addEventListener('click', () => { closeModal(); switchTab('today'); });
   }
 
   function openWrongBook() {
@@ -2584,44 +2608,35 @@
     } catch (e) { /* 忽略 */ }
   }
 
-
   /* ---------- 每日学习提醒 ---------- */
   function checkReminder() {
-    if (!("Notification" in window)) return;
-    if (Notification.permission !== "granted") return;
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
     const s = TTStore.getSettings();
     if (!s.remindTime) return;
     const now = new Date();
-    const [hh, mm] = s.remindTime.split(":").map(Number);
-    const remindMinutes = hh * 60 + mm;
+    const parts = s.remindTime.split(':').map(Number);
+    const remindMinutes = parts[0] * 60 + parts[1];
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    // Only remind within 30min window after remind time
     if (nowMinutes < remindMinutes || nowMinutes > remindMinutes + 30) return;
-    // Only if not studied today
     if (TTScheduler.hasStudiedToday()) return;
-    // Only once per day
-    const lastRemind = localStorage.getItem("ttgd.lastRemind");
+    const lastRemind = localStorage.getItem('ttgd.lastRemind');
     if (lastRemind === TTStore.todayStr()) return;
-    localStorage.setItem("ttgd.lastRemind", TTStore.todayStr());
-    new Notification("天天滚动 · 学习提醒", {
-      body: "今天还没学习哦，来复习几张卡片吧！📚",
-      icon: "icons/icon-192.png",
-      badge: "icons/icon-192.png"
+    localStorage.setItem('ttgd.lastRemind', TTStore.todayStr());
+    new Notification('天天滚动 · 学习提醒', {
+      body: '今天还没学习哦，来复习几张卡片吧！',
+      icon: 'icons/icon-192.png'
     });
   }
 
   function startReminderCheck() {
-    // Request permission on first interaction
-    if ("Notification" in window && Notification.permission === "default") {
-      // Will request when user first clicks
-      document.addEventListener("click", function reqOnce() {
+    if ('Notification' in window && Notification.permission === 'default') {
+      document.addEventListener('click', function reqOnce() {
         Notification.requestPermission();
-        document.removeEventListener("click", reqOnce);
+        document.removeEventListener('click', reqOnce);
       }, { once: true });
     }
-    // Check every 5 minutes
     setInterval(checkReminder, 5 * 60 * 1000);
-    // Also check on load
     setTimeout(checkReminder, 10000);
   }
 
@@ -2645,6 +2660,7 @@
     } catch (e) {
       console.error('渲染今日页失败', e);
     }
+    startReminderCheck();
   }
 
   /** 移除初始示例题（按 _sample 标记，幂等；只删最初生成的 22 条） */
