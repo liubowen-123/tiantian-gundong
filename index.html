@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -50,7 +50,7 @@
       </div>
 
       <!-- 浠ラ甯﹀姩路姣忔棩璁板綍 -->
-      <div class="card record-card">
+      <div class="card record-card" id="record-card-today" role="button">
         <div class="record-main">
           <div class="record-title">浠ラ甯﹀姩 路 姣忔棩璁板綍</div>
           <div class="record-sub"><span id="rec-today">浠婃棩 0 棰?/span> 路 <span id="rec-days">宸茶褰?0 澶?/span></div>
@@ -63,6 +63,7 @@
         <button class="seg-btn active" data-mode="all">鍏ㄩ儴</button>
         <button class="seg-btn" data-mode="quiz">鍙埛棰?/button>
         <button class="seg-btn" data-mode="card">鍙狝nki</button>
+        <button class="seg-btn seg-btn-wrong" data-mode="wrong">♻️ 错题</button>
       </div>
       <button class="btn-primary" id="btn-start">寮€濮嬩粖鏃ュ涔?/button>
 
@@ -192,6 +193,7 @@
         <div class="learn-progress-bar" id="learn-progress-bar"></div>
       </div>
       <span class="learn-count" id="learn-count">1/10</span>
+        <span class="learn-timer hidden" id="learn-timer"></span>
       <span class="exam-timer hidden" id="exam-timer"></span>
     </header>
 

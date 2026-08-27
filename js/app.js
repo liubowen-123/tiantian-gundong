@@ -25,6 +25,7 @@
     imgBrowseSub: null,      // 看图卡库：当前浏览的科目
     imgBrowseCh: null,       // 看图卡库：当前浏览的章节
     learnBusy: false,
+    learnTimerInterval: null,
     exam: null             // 整卷考试会话
   };
 
@@ -146,7 +147,7 @@
     $('#rec-days').textContent = `已记录 ${rec.recordedDays} 天`;
 
     // 学习模式
-    $$('#mode-seg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === App.learnMode));
+    $('#mode-seg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === App.learnMode));
 
     // 开始按钮
     const btn = $('#btn-start');
@@ -316,12 +317,68 @@
 
   function startLearning(mode) {
     const m = mode || App.learnMode;
+    if (m === "wrong") {
+      const q = TTScheduler.wrongTodayQueue("all");
+      if (q.total === 0) { toast("今日暂无错题需要重刷"); return; }
+      showStartPreview(q, "wrong");
+      return;
+    }
     const q = TTScheduler.todayQueue(m);
-    if (q.total === 0) { toast('当前模式今日暂无任务'); return; }
-    App.learnMode = m;
-    beginQueue([...q.due, ...q.fresh], 'today', 'today',
-      m === 'quiz' ? '刷题完成！' : m === 'card' ? 'Anki 复习完成！' : '今日学习完成！',
-      isNewItem);
+    if (q.total === 0) { toast("当前模式今日暂无任务"); return; }
+    showStartPreview(q, m);
+  }
+
+  function showStartPreview(q, m) {
+    const modeName = m === "quiz" ? "刷题" : m === "card" ? "Anki 复习" : m === "wrong" ? "错题重练" : "学习";
+    const dueCount = q.due.length;
+    const freshCount = q.fresh.length;
+    openModal(`
+      <div class="modal-title">开始${modeName}</div>
+      <div class="start-preview">
+        <div class="sp-row"><span class="sp-label">今日复习</span><span class="sp-num">${dueCount} 项</span></div>
+        ${freshCount > 0 ? `<div class="sp-row"><span class="sp-label">今日新学</span><span class="sp-num">${freshCount} 项</span></div>` : ""}
+        <div class="sp-row sp-total"><span class="sp-label">共计</span><span class="sp-num">${q.total} 项</span></div>
+        ${m === "wrong" ? `<div class="sp-tip">错题优先出现，答错会再次安排重刷</div>` : ""}
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="sp-cancel">取消</button>
+        <button class="btn-primary" id="sp-go">开始学习</button>
+      </div>
+    `);
+    document.getElementById("sp-cancel").addEventListener("click", closeModal);
+    document.getElementById("sp-go").addEventListener("click", () => {
+      closeModal();
+      App.learnMode = m;
+      const title = m === "quiz" ? "刷题完成！" : m === "card" ? "Anki 复习完成！" : m === "wrong" ? "错题重练完成！" : "今日学习完成！";
+      const source = m === "wrong" ? "wrong" : "today";
+      const backTo = m === "wrong" ? "today" : "today";
+      beginQueue([...q.due, ...q.fresh], source, backTo, title, isNewItem);
+    });
+  }
+
+  /* ---------- 学习实时计时器 ---------- */
+  function startLearnTimer() {
+    stopLearnTimer();
+    const el = document.getElementById("learn-timer");
+    if (el) el.classList.remove("hidden");
+    updateLearnTimer();
+    App.learnTimerInterval = setInterval(updateLearnTimer, 1000);
+  }
+
+  function stopLearnTimer() {
+    if (App.learnTimerInterval) {
+      clearInterval(App.learnTimerInterval);
+      App.learnTimerInterval = null;
+    }
+    const el = document.getElementById("learn-timer");
+    if (el) el.classList.add("hidden");
+  }
+
+  function updateLearnTimer() {
+    const el = document.getElementById("learn-timer");
+    if (!el || !App.learnSessionStart) return;
+    const elapsed = Math.floor((Date.now() - App.learnSessionStart) / 1000);
+    el.textContent = "⏱ " + fmtClock(elapsed * 1000);
   }
 
   function startSubject(subject) {
@@ -1007,6 +1064,7 @@
         TTStore.logDay(TTStore.todayStr(), { seconds: elapsed });
       }
       App.learnSessionStart = null;
+      stopLearnTimer();
     }
     $('#learn-progress-bar').style.width = '100%';
     hideExamTimer();
@@ -1439,6 +1497,42 @@
   }
 
   /* ================= 错题本 ================= */
+
+  /* ---------- 以题带动 · 每日记录面板 ---------- */
+  function openDailyRecord() {
+    const rec = TTScheduler.dailyRecord();
+    const log = TTStore.getLog();
+    const today = TTStore.todayStr();
+    // Build 7-day mini chart data
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const ds = TTStore.todayStr(d);
+      const entry = log[ds] || { review: 0, correct: 0, wrong: 0, newLearned: 0 };
+      days.push({ date: ds, count: (entry.review || 0) + (entry.newLearned || 0), label: (d.getMonth()+1) + "/" + d.getDate() });
+    }
+    const maxCount = Math.max(...days.map(d => d.count), 1);
+    const barsHtml = days.map(d => `
+      <div class="dr-bar-col">
+        <div class="dr-bar" style="height:${Math.round(d.count / maxCount * 60)}px"></div>
+        <div class="dr-bar-label">${d.label}</div>
+      </div>`).join("");
+
+    openModal(`
+      <div class="modal-title">以题带动 · 每日记录</div>
+      <div class="dr-stats">
+        <div class="dr-stat"><div class="dr-stat-num">${rec.todayCount}</div><div class="dr-stat-label">今日题数</div></div>
+        <div class="dr-stat"><div class="dr-stat-num">${rec.recordedDays}</div><div class="dr-stat-label">已记录天数</div></div>
+        <div class="dr-stat"><div class="dr-stat-num">${TTScheduler.streak()}</div><div class="dr-stat-label">连续打卡</div></div>
+      </div>
+      <div class="dr-chart">${barsHtml}</div>
+      <div class="dr-actions">
+        <button class="btn-primary" id="dr-start" style="flex:1">开始今日学习</button>
+      </div>
+    `);
+    document.getElementById("dr-start").addEventListener("click", () => { closeModal(); switchTab("today"); });
+  }
+
   function openWrongBook() {
     const book = TTScheduler.wrongBook();
     if (book.length === 0) { toast('暂无错题，继续加油！'); return; }
@@ -2312,6 +2406,7 @@
 
   /* ================= 事件绑定 & 启动 ================= */
   function exitLearn() {
+    stopLearnTimer();
     if (App.exam && !App.exam.submitted) {
       if (confirm('退出考试？本次答题将不保存。')) {
         clearExamTimer();
@@ -2371,7 +2466,9 @@
     on('#btn-trash', 'click', openTrash);
 
     // 练习中心入口
-    $('#entry-record').addEventListener('click', () => switchTab('stats'));
+    $('#entry-record').addEventListener('click', () => openDailyRecord());
+    const rcToday = document.getElementById('record-card-today');
+    if (rcToday) rcToday.addEventListener('click', () => openDailyRecord());
     $('#entry-exam').addEventListener('click', openExam);
     $('#entry-wrong').addEventListener('click', openWrongBook);
     on('#entry-img', 'click', openImageBrowse);
@@ -2485,6 +2582,47 @@
         if (s.themeMode === 'auto' || !s.themeMode) applyTheme();
       });
     } catch (e) { /* 忽略 */ }
+  }
+
+
+  /* ---------- 每日学习提醒 ---------- */
+  function checkReminder() {
+    if (!("Notification" in window)) return;
+    if (Notification.permission !== "granted") return;
+    const s = TTStore.getSettings();
+    if (!s.remindTime) return;
+    const now = new Date();
+    const [hh, mm] = s.remindTime.split(":").map(Number);
+    const remindMinutes = hh * 60 + mm;
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    // Only remind within 30min window after remind time
+    if (nowMinutes < remindMinutes || nowMinutes > remindMinutes + 30) return;
+    // Only if not studied today
+    if (TTScheduler.hasStudiedToday()) return;
+    // Only once per day
+    const lastRemind = localStorage.getItem("ttgd.lastRemind");
+    if (lastRemind === TTStore.todayStr()) return;
+    localStorage.setItem("ttgd.lastRemind", TTStore.todayStr());
+    new Notification("天天滚动 · 学习提醒", {
+      body: "今天还没学习哦，来复习几张卡片吧！📚",
+      icon: "icons/icon-192.png",
+      badge: "icons/icon-192.png"
+    });
+  }
+
+  function startReminderCheck() {
+    // Request permission on first interaction
+    if ("Notification" in window && Notification.permission === "default") {
+      // Will request when user first clicks
+      document.addEventListener("click", function reqOnce() {
+        Notification.requestPermission();
+        document.removeEventListener("click", reqOnce);
+      }, { once: true });
+    }
+    // Check every 5 minutes
+    setInterval(checkReminder, 5 * 60 * 1000);
+    // Also check on load
+    setTimeout(checkReminder, 10000);
   }
 
   function init() {

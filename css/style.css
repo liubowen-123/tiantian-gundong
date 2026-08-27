@@ -1033,3 +1033,99 @@ html.dark .mastery-name, html.dark .sub-bar-name { color: #a8bcb1; }
 }
 .learn-timer.running { color: var(--primary-dark); }
 html.dark .learn-timer.running { color: #7fd7ab; }
+
+/* ===== 错题优先模式按钮 ===== */
+.seg-btn-wrong {
+  color: #e5484d !important;
+  font-weight: 600;
+}
+.seg-btn-wrong.active {
+  background: #e5484d !important;
+  color: #fff !important;
+}
+html.dark .seg-btn-wrong { color: #f0716f !important; }
+html.dark .seg-btn-wrong.active { background: #e5484d !important; color: #fff !important; }
+
+/* ===== 学习实时计时器 ===== */
+.learn-timer {
+  font-size: 13px;
+  color: var(--text-2);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 8px;
+  background: var(--card);
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+}
+html.dark .learn-timer { background: #1a251f; color: #a8bcb1; }
+
+/* ===== 开始学习预览弹窗 ===== */
+.start-preview {
+  margin: 12px 0;
+}
+.sp-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.sp-row:last-child { border-bottom: none; }
+.sp-label { font-size: 14px; color: var(--text-2); }
+.sp-num { font-size: 16px; font-weight: 700; color: var(--text); }
+.sp-total .sp-label, .sp-total .sp-num { color: var(--primary); font-weight: 700; }
+.sp-tip {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-3);
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+/* ===== 以题带动 · 每日记录面板 ===== */
+.dr-stats {
+  display: flex;
+  gap: 12px;
+  margin: 12px 0 16px;
+}
+.dr-stat {
+  flex: 1;
+  text-align: center;
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 12px 8px;
+}
+.dr-stat-num { font-size: 22px; font-weight: 800; color: var(--primary); }
+.dr-stat-label { font-size: 11px; color: var(--text-2); margin-top: 4px; }
+.dr-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 80px;
+  padding: 0 4px;
+  margin-bottom: 16px;
+}
+.dr-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.dr-bar {
+  width: 100%;
+  max-width: 32px;
+  background: linear-gradient(180deg, var(--primary), var(--primary-2, #38a97d));
+  border-radius: 4px 4px 0 0;
+  min-height: 2px;
+  transition: height .3s;
+}
+.dr-bar-label { font-size: 10px; color: var(--text-3); }
+.dr-actions { display: flex; gap: 10px; }
+
+/* Dark mode for new elements */
+html.dark .dr-stat { background: #101713; }
+html.dark .dr-bar { background: linear-gradient(180deg, #3aa97d, #2f8f6b); }
+html.dark .sp-tip { background: #101713; }
+
