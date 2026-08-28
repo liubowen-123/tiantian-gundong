@@ -25,8 +25,40 @@
     startingEase: 2.5,
     minEase: 1.3,
     maxEase: 3.0,
-    maxInterval: 3650         // 最长间隔（天），约 10 年
+    maxInterval: 3650,        // 最长间隔（天），约 10 年
+    fuzz: true                // 间隔抖动：打散到期日，避免同日学的一批复同日到
   };
+
+  const DAY_MS = 24 * 3600 * 1000;
+
+  /** 天数间隔 → 目标日当地 0 点时间戳（复习按日历天到期，早上打开即可见） */
+  function dayDue(now, days) {
+    const t = new Date(now);
+    t.setHours(0, 0, 0, 0);
+    t.setDate(t.getDate() + Math.max(1, Math.round(days)));
+    return t.getTime();
+  }
+
+  /** Anki 风格间隔抖动：≥2.5 天的间隔 ±8%（±1~4 天），打散到期日 */
+  function fuzzDelta(ivl) {
+    if (ivl < 2.5) return 0;
+    const span = Math.min(4, Math.max(1, Math.round(ivl * 0.08)));
+    return Math.floor(Math.random() * (2 * span + 1)) - span;
+  }
+
+  /** review 新间隔收尾：取整 → 至少比原间隔多 1 天 →（可选）抖动 → 上限 */
+  function nextReviewIvl(raw, prevIvl, d) {
+    const min = Math.round(prevIvl) + 1;
+    let iv = Math.max(Math.round(raw), min);
+    if (d.fuzz !== false) iv += fuzzDelta(iv);
+    return Math.min(d.maxInterval, Math.max(min, iv));
+  }
+
+  /** preview 用：与 nextReviewIvl 同规则但不抖动（展示基准值） */
+  function previewReviewIvl(raw, prevIvl, d) {
+    const min = Math.round(prevIvl) + 1;
+    return Math.min(d.maxInterval, Math.max(Math.round(raw), min));
+  }
 
   function defaultAnki() {
     const d = Object.assign({}, DEFAULT_ANKI, (TTStore.getSettings().anki || {}));
@@ -169,16 +201,16 @@
       // review / relearning 完成态
       if (rating === 'again') return { days: 0, label: steps[0] + ' 分钟内' };
       if (rating === 'hard') {
-        const iv = Math.max(1, clone.interval * 1.2);
+        const iv = previewReviewIvl(clone.interval * 1.2, clone.interval, d);
         return { days: iv, label: fmtInterval(iv) };
       }
       if (rating === 'good') {
-        const iv = Math.min(d.maxInterval, clone.interval * clone.ease);
-        return { days: iv, label: fmtInterval(Math.max(1, iv)) };
+        const iv = previewReviewIvl(clone.interval * clone.ease, clone.interval, d);
+        return { days: iv, label: fmtInterval(iv) };
       }
       if (rating === 'easy') {
-        const iv = Math.min(d.maxInterval, clone.interval * clone.ease * d.easyBonus);
-        return { days: iv, label: fmtInterval(Math.max(d.easyInterval, iv)) };
+        const iv = previewReviewIvl(clone.interval * clone.ease * d.easyBonus, clone.interval, d);
+        return { days: iv, label: fmtInterval(iv) };
       }
       return { days: 0, label: '' };
     },
@@ -193,7 +225,6 @@
       const d = getCfg();
       const now = Date.now();
       const MIN = 60 * 1000;
-      const DAY = 24 * 3600 * 1000;
       const steps = d.learningSteps;
       const lastStep = steps.length - 1;
       const wasNew = a.state === 'new';
@@ -208,7 +239,7 @@
           a.state = 'review';
           a.interval = d.easyInterval;
           a.ease = Math.min(d.maxEase, a.ease + 0.15);
-          a.due = now + a.interval * DAY;
+          a.due = dayDue(now, a.interval);
         } else {
           a.interval = 0;
           a.due = now + (rating === 'hard' ? 1 : steps[0]) * MIN;
@@ -227,7 +258,7 @@
             // 学习步骤完成 → 毕业进 review
             a.state = 'review';
             a.interval = d.graduatingInterval;
-            a.due = now + a.interval * DAY;
+            a.due = dayDue(now, a.interval);
           } else {
             a.step += 1;
             a.due = now + steps[a.step] * MIN;
@@ -236,7 +267,7 @@
           a.state = 'review';
           a.interval = d.easyInterval;
           a.ease = Math.min(d.maxEase, a.ease + 0.15);
-          a.due = now + a.interval * DAY;
+          a.due = dayDue(now, a.interval);
         }
         return finish(card, rating, { review: 1 });
       }
@@ -251,17 +282,17 @@
         a.interval = 0;
         a.due = now + steps[0] * MIN;
       } else if (rating === 'hard') {
-        a.interval = Math.min(d.maxInterval, Math.max(1, a.interval * 1.2));
-        a.due = now + a.interval * DAY;
+        a.interval = nextReviewIvl(a.interval * 1.2, a.interval, d);
+        a.due = dayDue(now, a.interval);
         // hard 不改变 ease
       } else if (rating === 'good') {
-        a.interval = Math.min(d.maxInterval, a.interval * a.ease);
-        a.due = now + a.interval * DAY;
+        a.interval = nextReviewIvl(a.interval * a.ease, a.interval, d);
+        a.due = dayDue(now, a.interval);
         // good 不改变 ease
       } else if (rating === 'easy') {
-        a.interval = Math.min(d.maxInterval, a.interval * a.ease * d.easyBonus);
+        a.interval = nextReviewIvl(a.interval * a.ease * d.easyBonus, a.interval, d);
         a.ease = Math.min(d.maxEase, a.ease + 0.15);
-        a.due = now + a.interval * DAY;
+        a.due = dayDue(now, a.interval);
       }
       return finish(card, rating, { review: 1 });
     },

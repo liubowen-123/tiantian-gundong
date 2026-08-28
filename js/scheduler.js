@@ -246,12 +246,24 @@
       return total === 0 ? null : Math.round(correct / total * 100);
     },
 
-    /** 明日到期数（含明日到期的选择题；记忆卡按分钟到期难预测，略去） */
+    /** 明日到期数：选择题按 nextReview 日期；记忆卡 review 态 due 已对齐日历天，可直接统计 */
     tomorrowDueCount() {
       const tomorrow = TTStore.addDays(todayStr(), 1);
-      return TTStore.getContent().filter(x =>
-        isQuiz(x) && !x.graduated && x.stage >= 0 && x.nextReview === tomorrow
-      ).length;
+      const dayAfter = TTStore.addDays(todayStr(), 2);
+      const t0 = new Date(tomorrow + 'T00:00:00').getTime();
+      const t1 = new Date(dayAfter + 'T00:00:00').getTime();
+      return TTStore.getContent().filter(x => {
+        if (isQuiz(x)) {
+          return !x.graduated && x.stage >= 0 && x.nextReview === tomorrow;
+        }
+        if (isCard(x)) {
+          const a = x.anki;
+          return !!(a && !a.suspended && a.state === 'review' &&
+            a.interval < 365 &&
+            a.due != null && a.due >= t0 && a.due < t1);
+        }
+        return false;
+      }).length;
     },
 
     /** 每日记录：今日题数 + 累计已记录天数 */
