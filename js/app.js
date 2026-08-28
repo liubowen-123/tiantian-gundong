@@ -333,19 +333,16 @@
     const modeName = m === 'quiz' ? '刷题' : m === 'card' ? 'Anki 复习' : m === 'wrong' ? '错题重练' : '学习';
     const dueCount = q.due.length;
     const freshCount = q.fresh.length;
-    openModal(`
-      <div class="modal-title">开始${modeName}</div>
+    openModal(\n      <div class="modal-title"> + '开始' + modeName + </div>
       <div class="start-preview">
-        <div class="sp-row"><span class="sp-label">今日复习</span><span class="sp-num">${dueCount} 项</span></div>
-        ${freshCount > 0 ? `<div class="sp-row"><span class="sp-label">今日新学</span><span class="sp-num">${freshCount} 项</span></div>` : ''}
-        <div class="sp-row sp-total"><span class="sp-label">共计</span><span class="sp-num">${q.total} 项</span></div>
-        ${m === 'wrong' ? `<div class="sp-tip">错题优先出现，答错会再次安排重刷</div>` : ''}
-      </div>
+        <div class="sp-row"><span class="sp-label">今日复习</span><span class="sp-num"> + dueCount +  项</span></div>
+         + (freshCount > 0 ? <div class="sp-row"><span class="sp-label">今日新学</span><span class="sp-num"> + freshCount +  项</span></div> : '') + \n        <div class="sp-row sp-total"><span class="sp-label">共计</span><span class="sp-num"> + q.total +  项</span></div>
+         + (m === 'wrong' ? <div class="sp-tip">错题优先出现，答错会再次安排重刷</div> : '') + \n      </div>
       <div class="modal-actions">
         <button class="btn-cancel" id="sp-cancel">取消</button>
         <button class="btn-primary" id="sp-go">开始学习</button>
       </div>
-    `);
+    );
     document.getElementById('sp-cancel').addEventListener('click', closeModal);
     document.getElementById('sp-go').addEventListener('click', () => {
       closeModal();
@@ -354,31 +351,6 @@
       const source = m === 'wrong' ? 'wrong' : 'today';
       beginQueue([...q.due, ...q.fresh], source, 'today', title, isNewItem);
     });
-  }
-
-  /* ---------- 学习实时计时器 ---------- */
-  function startLearnTimer() {
-    stopLearnTimer();
-    const el = document.getElementById('learn-timer');
-    if (el) el.classList.remove('hidden');
-    updateLearnTimer();
-    App.learnTimerInterval = setInterval(updateLearnTimer, 1000);
-  }
-
-  function stopLearnTimer() {
-    if (App.learnTimerInterval) {
-      clearInterval(App.learnTimerInterval);
-      App.learnTimerInterval = null;
-    }
-    const el = document.getElementById('learn-timer');
-    if (el) el.classList.add('hidden');
-  }
-
-  function updateLearnTimer() {
-    const el = document.getElementById('learn-timer');
-    if (!el || !App.learnSessionStart) return;
-    const elapsed = Math.floor((Date.now() - App.learnSessionStart) / 1000);
-    el.textContent = '⏱ ' + fmtClock(elapsed * 1000);
   }
 
   /* ---------- 学习实时计时器 ---------- */
@@ -1106,7 +1078,7 @@
       <div class="learn-done">
         <div class="done-icon">${confetti}</div>
         <div class="done-title">${esc(App.learnTitle)}</div>
-        <div class="done-desc">共完成 ${total} 项，答对 ${okCount} 项${okCount < total ? '，答错的已安排稍后重刷' : ''}。<br>${App.lastSessionSeconds ? '本次学习用时 ' + fmtClock(App.lastSessionSeconds * 1000) + '。<br>' : ''}错题会自动加入错题本，按记忆曲线继续滚动。</div>
+        <div class="done-desc">共完成 ${total} 项，答对 ${okCount} 项${okCount < total ? '，答错的已安排稍后重刷' : ''}。<br>错题会自动加入错题本，按记忆曲线继续滚动。</div>
         <button class="btn-primary" id="btn-done-again" style="margin-bottom:10px">再学一轮错题</button>
         <button class="btn-ghost" id="btn-done-home" style="width:100%">${backLabel}</button>
       </div>`;
@@ -1536,24 +1508,22 @@
       days.push({ date: ds, count: (entry.review || 0) + (entry.newLearned || 0), label: (d.getMonth()+1) + '/' + d.getDate() });
     }
     const maxCount = Math.max(...days.map(d => d.count), 1);
-    const barsHtml = days.map(d => `
-      <div class="dr-bar-col">
-        <div class="dr-bar" style="height:${Math.round(d.count / maxCount * 60)}px"></div>
-        <div class="dr-bar-label">${d.label}</div>
-      </div>`).join('');
+    const barsHtml = days.map(d => \n      <div class="dr-bar-col">
+        <div class="dr-bar" style="height:px"></div>
+        <div class="dr-bar-label"></div>
+      </div>).join('');
 
-    openModal(`
-      <div class="modal-title">以题带动 · 每日记录</div>
+    openModal(\n      <div class="modal-title">以题带动 · 每日记录</div>
       <div class="dr-stats">
-        <div class="dr-stat"><div class="dr-stat-num">${rec.todayCount}</div><div class="dr-stat-label">今日题数</div></div>
-        <div class="dr-stat"><div class="dr-stat-num">${rec.recordedDays}</div><div class="dr-stat-label">已记录天数</div></div>
-        <div class="dr-stat"><div class="dr-stat-num">${TTScheduler.streak()}</div><div class="dr-stat-label">连续打卡</div></div>
+        <div class="dr-stat"><div class="dr-stat-num"></div><div class="dr-stat-label">今日题数</div></div>
+        <div class="dr-stat"><div class="dr-stat-num"></div><div class="dr-stat-label">已记录天数</div></div>
+        <div class="dr-stat"><div class="dr-stat-num"></div><div class="dr-stat-label">连续打卡</div></div>
       </div>
-      <div class="dr-chart">${barsHtml}</div>
+      <div class="dr-chart"></div>
       <div class="dr-actions">
         <button class="btn-primary" id="dr-start" style="flex:1">开始今日学习</button>
       </div>
-    `);
+    );
     document.getElementById('dr-start').addEventListener('click', () => { closeModal(); switchTab('today'); });
   }
 
