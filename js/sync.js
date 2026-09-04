@@ -288,7 +288,8 @@
     function showIdle() {
       if (uiShown) return;
       uiShown = true;
-      // 未登录：不弹全屏遮罩，主界面立即可用；用户可在设置里点「去登录」
+      // 必须登录才能使用：未登录时弹出全屏登录入口，登录成功后才放行
+      if (!authed) showLogin();
       startWatch();
       emit();
     }
@@ -297,11 +298,14 @@
       showIdle();
     }
     client.auth.getSession().then(finish).catch(finish);
-    // 网络慢时 5 秒后先放行主界面，不阻塞使用；会话后续到达仍会自动进入同步
-    setTimeout(showIdle, 5000);
+    // 兜底：网络慢时 getSession 未及时返回也先弹登录入口，避免长时间白屏
+    setTimeout(showIdle, 6000);
     client.auth.onAuthStateChange(function (event, session) {
       if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) { onSignedIn(session); }
-      else if (event === 'SIGNED_OUT') { authed = false; user = null; stopWatch(); emit(); }
+      else if (event === 'SIGNED_OUT') {
+        authed = false; user = null; stopWatch(); emit();
+        showLogin();   // 退出登录后回到登录入口（必须登录才能使用）
+      }
     });
   }
   if (document.readyState === 'loading') {
