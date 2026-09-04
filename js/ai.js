@@ -1,5 +1,5 @@
 /* ============================================================
-   AI 助教：经 Supabase Edge Function 代理调用硅基流动免费模型
+   AI 助教：经 Supabase Edge Function 代理调用硅基流动免费模型（流式）
    模型：Qwen/Qwen2.5-7B-Instruct（完全免费）
    Key 存于服务端环境变量，前端只持 Supabase anon key
    ============================================================ */
@@ -9,7 +9,7 @@
     try { return (window.TT_SUPABASE && window.TT_SUPABASE.anonKey) || ''; } catch (e) { return ''; }
   }
   var history = [];
-  var panel = null, msgsEl = null, inputEl = null, sendBtn = null, tipEl = null;
+  var panel = null, msgsEl = null, inputEl = null, sendBtn = null;
 
   /* ---------- 样式（绿色主题，与网站一致） ---------- */
   var CSS = '' +
@@ -38,9 +38,11 @@
     'border-bottom-right-radius:4px;}' +
     '.tt-ai-msg.bot{align-self:flex-start;background:#fff;color:#243b31;border:1px solid #e3efe9;' +
     'border-bottom-left-radius:4px;box-shadow:0 1px 3px rgba(20,60,40,.06);}' +
+    '.tt-ai-msg.bot.typing:empty::after{content:"…";}' +
     '.tt-ai-msg.err{align-self:flex-start;background:#fdecec;color:#b03a2e;border:1px solid #f5c6c0;}' +
-    '.tt-ai-welcome{color:#7b8f86;font-size:12.5px;line-height:1.7;}' +
-    '.tt-ai-loading{color:#9fb3aa;font-size:12px;padding:2px 4px;}' +
+    '.tt-ai-msg .cur{display:inline-block;width:7px;height:14px;background:#2f8f6b;margin-left:1px;' +
+    'vertical-align:-2px;animation:ttAiBlink 1s steps(2) infinite;}' +
+    '@keyframes ttAiBlink{0%,100%{opacity:1}50%{opacity:0}}' +
     '.tt-ai-inputbar{display:flex;gap:8px;padding:10px 12px 12px;border-top:1px solid #eef3f0;background:#fff;}' +
     '.tt-ai-inputbar textarea{flex:1;border:1px solid #dfe9e3;border-radius:12px;padding:9px 12px;font-size:13.5px;' +
     'resize:none;outline:none;font-family:inherit;min-height:40px;max-height:110px;color:#243b31;background:#fbfdfb;}' +
@@ -88,7 +90,6 @@
     msgsEl = panel.querySelector('#tt-ai-msgs');
     inputEl = panel.querySelector('#tt-ai-input');
     sendBtn = panel.querySelector('#tt-ai-send');
-    tipEl = panel.querySelector('.tt-ai-foot');
 
     panel.querySelector('#tt-ai-close').addEventListener('click', close);
     panel.querySelector('#tt-ai-clear').addEventListener('click', clearChat);
@@ -107,7 +108,7 @@
   function clearChat() { history = []; if (msgsEl) msgsEl.innerHTML = ''; appendMsg('bot', '已清空，开始新对话吧～'); }
 
   function appendMsg(role, text) {
-    if (!msgsEl) return;
+    if (!msgsEl) return null;
     var d = document.createElement('div');
     d.className = 'tt-ai-msg ' + role;
     d.textContent = text;
@@ -122,7 +123,7 @@
     if (!b) inputEl.focus();
   }
 
-  /* ---------- 请求 ---------- */
+  /* ---------- 流式请求 ---------- */
   function ask() {
     if (!panel) ensureUI();
     var text = inputEl.value.trim();
@@ -130,8 +131,10 @@
     inputEl.value = '';
     history.push({ role: 'user', content: text });
     appendMsg('user', text);
-    var loading = appendMsg('bot', '思考中…');
+    var bubble = appendMsg('bot', '');
+    bubble.classList.add('typing');
     setBusy(true);
+
     fetch(FN_URL, {
       method: 'POST',
       headers: {
@@ -139,22 +142,66 @@
         'Authorization': 'Bearer ' + anonKey(),
       },
       body: JSON.stringify({ messages: history.slice(-10) }),
-    }).then(function (r) {
-      return r.json().then(function (d) { return { ok: r.ok, data: d }; });
-    }).then(function (res) {
-      if (res.ok && res.data && res.data.content) {
-        history.push({ role: 'assistant', content: res.data.content });
-        if (loading && loading.parentNode) loading.remove();
-        appendMsg('bot', res.data.content);
-      } else {
-        var em = (res.data && res.data.error) || 'AI 服务暂时不可用';
-        if (loading && loading.parentNode) loading.remove();
-        appendMsg('err', '⚠ ' + em);
+    }).then(function (resp) {
+      if (!resp.ok) {
+        return resp.json().then(function (d) {
+          throw new Error((d && d.error) || 'AI 服务暂时不可用');
+        });
       }
-      setBusy(false);
+      return resp;
+    }).then(function (resp) {
+      if (!resp.body) throw new Error('当前浏览器不支持流式读取');
+      var reader = resp.body.getReader();
+      var decoder = new TextDecoder('utf-8');
+      var buf = '';
+      var acc = '';
+      function pump() {
+        return reader.read().then(function (r) {
+          if (r.done) return null;
+          buf += decoder.decode(r.value, { stream: true });
+          var lines = buf.split('\n');
+          buf = lines.pop();
+          for (var i = 0; i < lines.length; i++) {
+            var line = lines[i].trim();
+            if (line.indexOf('data:') !== 0) continue;
+            var data = line.slice(5).trim();
+            if (data === '[DONE]') continue;
+            try {
+              var j = JSON.parse(data);
+              var delta = j.choices && j.choices[0] && j.choices[0].delta
+                ? (j.choices[0].delta.content || '') : '';
+              if (delta) {
+                acc += delta;
+                bubble.classList.remove('typing');
+                bubble.textContent = acc;
+                msgsEl.scrollTop = msgsEl.scrollHeight;
+              }
+            } catch (e) { /* 忽略半行 */ }
+          }
+          return pump();
+        });
+      }
+      return pump().then(function () {
+        // 尾部残留数据
+        if (buf.trim()) {
+          try {
+            var j = JSON.parse(buf.replace(/^data:\s*/, '').trim());
+            var delta = j.choices && j.choices[0] && j.choices[0].delta
+              ? (j.choices[0].delta.content || '') : '';
+            if (delta) { acc += delta; bubble.textContent = acc; }
+          } catch (e) { /* ignore */ }
+        }
+        if (!acc) {
+          bubble.textContent = '（无回复，请重试）';
+        } else {
+          history.push({ role: 'assistant', content: acc });
+        }
+        bubble.classList.remove('typing');
+        setBusy(false);
+      });
     }).catch(function (e) {
-      if (loading && loading.parentNode) loading.remove();
-      appendMsg('err', '⚠ 网络异常：' + (e && e.message || e));
+      bubble.classList.remove('typing');
+      bubble.textContent = '⚠ ' + (e && e.message || e);
       setBusy(false);
     });
   }
