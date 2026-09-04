@@ -13,7 +13,7 @@
   };
 
   const DEFAULT_SETTINGS = {
-    dailyNew: 10,          // 每日新学目标
+    dailyNew: 0,           // 每日新学目标（默认 0 = 不自动补新卡，可手动调）
     intervals: [1, 2, 4, 7, 15, 30],  // 艾宾浩斯复习间隔（天）
     theme: 'green',
     themeMode: 'auto',     // auto | light | dark

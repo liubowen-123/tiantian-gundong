@@ -27,6 +27,8 @@ function assert(cond, msg) {
 TTStore.resetAll();
 TTSeed.seed();
 TTAnki.migrate();
+assert(TTStore.getSettings().dailyNew === 0, '默认每日新学目标为 0（不自动补新卡）');
+TTStore.saveSettings({ dailyNew: 10 }); // 显式开启额度
 
 console.log('== 1. 模式过滤 ==');
 let qz = TTScheduler.todayQueue('quiz');
@@ -109,6 +111,7 @@ if (window.TTBundledImageCards && window.TTBundledImageCards.length > 100) {
   const before = TTStore.getContent().length;
   TTStore.bulkAdd(window.TTBundledImageCards);
   TTAnki.migrate();
+  TTStore.saveSettings({ dailyNew: 10 }); // 开启额度以验证图片卡进入新学队列
   const after = TTStore.getContent().length;
   assert(after - before >= 100, '批量导入内置图片挖空卡（' + (after - before) + ' 张）');
   const joined = TTStore.getContent().filter(c => c.type === 'card' && c.masks && c.masks.length);

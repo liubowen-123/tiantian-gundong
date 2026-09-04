@@ -106,7 +106,7 @@ assert(c.anki.ease === 3.0, 'ease 不高于 3.0');
 
 console.log('== 6. 队列集成 ==');
 TTStore.resetAll();
-TTStore.saveSettings({ anki: { fuzz: false } });
+TTStore.saveSettings({ anki: { fuzz: false }, dailyNew: 10 });
 TTSeed.seed();
 TTAnki.migrate();
 const q0 = TTScheduler.todayQueue();

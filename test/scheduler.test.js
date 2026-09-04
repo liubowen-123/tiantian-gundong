@@ -26,6 +26,8 @@ function assert(cond, msg) {
 // ---- 测试 ----
 console.log('== 1. 种子数据 ==');
 TTSeed.seed();
+assert(TTStore.getSettings().dailyNew === 0, '默认每日新学目标为 0（不自动补新卡）');
+TTStore.saveSettings({ dailyNew: 10 }); // 显式开启额度
 const content = TTStore.getContent();
 assert(content.length === 22, '种子内容 22 条，实际 ' + content.length);
 assert(content.every(c => c.stage === -1), '全部为未学习状态');

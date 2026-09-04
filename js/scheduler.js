@@ -52,9 +52,12 @@
       });
     },
 
-    /** 今日新学额度：未学习条目（选择题 stage<0 或 卡片 new），按创建时间取前 N 个。mode: all|quiz|card */
+    /** 今日新学额度：默认不自动补充新卡（返回空），新卡由用户在内容库 / 看图卡库手动发起学习 */
     newItems(mode) {
       const settings = TTStore.getSettings();
+      // 设置里每日新学目标 = 0 时不补充；>0 时按额度补充（默认 0：不自动补）
+      const limit = Math.max(0, settings.dailyNew || 0);
+      if (limit === 0) return [];
       const unlearned = TTStore.getContent()
         .filter(x => {
           if (!typeOk(x, mode)) return false;
@@ -64,7 +67,7 @@
         })
         .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
       const done = this.dayLog().newLearned;
-      return unlearned.slice(0, Math.max(0, settings.dailyNew - done));
+      return unlearned.slice(0, Math.max(0, limit - done));
     },
 
     /** 今日队列：先复习，后新学。mode: all|quiz|card */
