@@ -284,13 +284,24 @@
     try {
       client = window.supabase.createClient(CFG.url, CFG.anonKey);
     } catch (e) { console.error('supabase init failed', e); return; }
-    client.auth.getSession().then(function (res) {
-      if (res.data && res.data.session) { onSignedIn(res.data.session); }
-      else { showLogin(); }
-    }).catch(function () { showLogin(); });
+    var uiShown = false;
+    function showIdle() {
+      if (uiShown) return;
+      uiShown = true;
+      // 未登录：不弹全屏遮罩，主界面立即可用；用户可在设置里点「去登录」
+      startWatch();
+      emit();
+    }
+    function finish(res) {
+      if (res && res.data && res.data.session) { onSignedIn(res.data.session); }
+      showIdle();
+    }
+    client.auth.getSession().then(finish).catch(finish);
+    // 网络慢时 5 秒后先放行主界面，不阻塞使用；会话后续到达仍会自动进入同步
+    setTimeout(showIdle, 5000);
     client.auth.onAuthStateChange(function (event, session) {
       if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) { onSignedIn(session); }
-      else if (event === 'SIGNED_OUT') { authed = false; user = null; stopWatch(); emit(); showLogin(); }
+      else if (event === 'SIGNED_OUT') { authed = false; user = null; stopWatch(); emit(); }
     });
   }
   if (document.readyState === 'loading') {

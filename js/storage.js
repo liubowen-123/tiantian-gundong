@@ -62,6 +62,20 @@
       localStorage.setItem(key, JSON.stringify(val));
     } catch (e) {
       console.warn('write failed', key, e);
+      // 存储空间不足时提示用户
+      if (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014) {
+        var msg = '⚠️ 存储空间不足！请导出备份后清理数据（设置 → 重置所有数据）';
+        if (typeof toast === 'function') {
+          toast(msg);
+        } else {
+          // fallback：在页面顶部显示
+          var banner = document.createElement('div');
+          banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#e5484d;color:#fff;text-align:center;padding:10px 16px;font-size:14px;font-weight:600';
+          banner.textContent = msg;
+          document.body.appendChild(banner);
+          setTimeout(function () { banner.remove(); }, 5000);
+        }
+      }
     }
   }
 
@@ -420,15 +434,27 @@
 
     // ---- 全部导出/导入 ----
     exportAll() {
+      // 除核心 key 外，把所有其他 ttgd.* key（学习计划/学习记录/题库等）一并纳入同步
+      const CORE = [KEYS.content, KEYS.settings, KEYS.log, KEYS.trash, KEYS.xp, KEYS.lastDate, KEYS.exam];
+      const extra = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.indexOf('ttgd.') === 0 && k !== 'ttgd.sync.meta' && k !== 'ttgd.bundled.v1' && CORE.indexOf(k) < 0) {
+          try { extra[k] = localStorage.getItem(k); } catch (e) {}
+        }
+      }
       return JSON.stringify({
         app: 'tiantian-gundong',
-        version: 2,
+        version: 3,
         exportedAt: new Date().toISOString(),
         settings: this.getSettings(),
         content: this.getContent(),
         log: this.getLog(),
         trash: this.getTrash(),
-        xp: this.getXp()
+        xp: this.getXp(),
+        lastDate: this.getLastDate(),
+        exam: this.getExam(),
+        extra
       }, null, 2);
     },
     importAll(jsonStr) {
@@ -439,6 +465,13 @@
       if (data.log) this.saveLog(data.log);
       if (Array.isArray(data.trash)) this.saveTrash(data.trash);
       if (data.xp) write(KEYS.xp, data.xp);
+      if (data.lastDate != null && data.lastDate !== '') this.setLastDate(data.lastDate);
+      if (Array.isArray(data.exam)) this.saveExam(data.exam);
+      if (data.extra && typeof data.extra === 'object') {
+        Object.keys(data.extra).forEach(k => {
+          try { localStorage.setItem(k, data.extra[k]); } catch (e) {}
+        });
+      }
       return data.content ? data.content.length : 0;
     },
 
@@ -446,6 +479,22 @@
       Object.keys(KEYS).forEach(k => localStorage.removeItem(KEYS[k]));
       localStorage.removeItem('ttgd.bundled.v1');
       contentCache = null;
+    },
+
+    /** 估算存储用量（字节），返回格式化字符串 */
+    getStorageUsage() {
+      var total = 0;
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf('ttgd.') === 0) {
+          var v = localStorage.getItem(k);
+          total += (k.length + (v ? v.length : 0)) * 2; // UTF-16 每字符 2 字节
+        }
+      }
+      var unit = 'B';
+      if (total > 1024) { total = total / 1024; unit = 'KB'; }
+      if (total > 1024) { total = total / 1024; unit = 'MB'; }
+      return total.toFixed(1) + ' ' + unit;
     }
   };
 
