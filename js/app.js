@@ -108,7 +108,7 @@
       return;
     }
     el.innerHTML = arr.map(r => `
-      <div class="mastery-row">
+      <div class="mastery-row" data-subject="${esc(r.subject)}">
         <div class="mastery-name">${esc(r.subject)}</div>
         <div class="mastery-track"><div class="mastery-fill" style="width:${r.pct}%"></div></div>
         <div class="mastery-num">${r.pct}%</div>
@@ -757,7 +757,7 @@
     return `
       <div class="learn-card">
         <div class="learn-meta">
-          <span class="tag sub">${esc(it.subject)}</span>
+          <span class="tag sub" data-subject="${esc(it.subject)}">${esc(it.subject)}</span>
           ${typeTag}${srcTag}${multiTag}
           ${it.reviewCount > 0 ? `<span class="tag sub">已复习 ${it.reviewCount} 次</span>` : ''}
         </div>
@@ -861,7 +861,7 @@
     return `
       <div class="learn-card" style="padding-bottom:0">
         <div class="learn-meta">
-          <span class="tag sub">${esc(it.subject)}</span>
+          <span class="tag sub" data-subject="${esc(it.subject)}">${esc(it.subject)}</span>
           ${typeTag}${stateTag}
           ${it.reviewCount > 0 ? `<span class="tag sub">复习 ${it.reviewCount} 次</span>` : ''}
         </div>
@@ -918,7 +918,7 @@
     return `
       <div class="learn-card" style="padding-bottom:0">
         <div class="learn-meta">
-          <span class="tag sub">${esc(it.subject)}</span>
+          <span class="tag sub" data-subject="${esc(it.subject)}">${esc(it.subject)}</span>
           <span class="tag">看图记忆卡</span>
           ${it.chapter ? `<span class="tag sub">${esc(it.chapter)}</span>` : ''}
           ${typeTag}${stateTag}
@@ -1335,7 +1335,7 @@
     }
     const meta = [
       `<span class="tag ${it.type === 'quiz' ? 'type' : ''}">${it.type === 'quiz' ? '选择题' : '记忆卡'}</span>`,
-      `<span class="tag sub">${esc(it.subject)}</span>`,
+      `<span class="tag sub" data-subject="${esc(it.subject)}">${esc(it.subject)}</span>`,
       it.chapter ? `<span class="tag sub">${esc(it.chapter)}</span>` : '',
       stateTag,
       it.reviewCount > 0 ? `<span class="tag sub">复习 ${it.reviewCount} 次</span>` : ''
@@ -1405,7 +1405,7 @@
         const subTotal = Object.values(groups[sub]).reduce((s, x) => s + x.length, 0);
         return `
           <div class="lib-group-subject">
-            <div class="lib-group-subject-title">📘 ${esc(sub)}<span class="lib-group-count">${subTotal}</span></div>
+            <div class="lib-group-subject-title" data-subject="${esc(sub)}">${esc(sub)}<span class="lib-group-count">${subTotal}</span></div>
             ${chapHtml}
           </div>`;
       }).join('');
@@ -1735,6 +1735,29 @@
           <div class="mastery-num">${o.total} 次</div>
         </div>`).join('')
       : '<div style="text-align:center;color:var(--text-3);font-size:13px;padding:6px">暂无错题</div>';
+
+    // 存储用量
+    var storageEl = $('#storage-usage');
+    if (storageEl) {
+      try {
+        var usage = TTStore.getStorageUsage();
+        if (navigator.storage && navigator.storage.estimate) {
+          navigator.storage.estimate().then(function (est) {
+            var quota = est.quota || 0;
+            var used = est.usage || 0;
+            var totalMB = (quota / (1024 * 1024)).toFixed(0);
+            var usedMB = (used / (1024 * 1024)).toFixed(1);
+            storageEl.textContent = usage + ' / ' + '总配额 ' + totalMB + ' MB (已用 ' + usedMB + ' MB)';
+          }).catch(function () {
+            storageEl.textContent = usage;
+          });
+        } else {
+          storageEl.textContent = usage;
+        }
+      } catch (e) {
+        storageEl.textContent = '--';
+      }
+    }
   }
 
   /** 绘制近 7 天正确率趋势折线图 */
@@ -1973,25 +1996,60 @@
   }
 
   /* ================= 导入 / 导出 ================= */
+  /** 导出数据并触发浏览器下载 .json 文件 */
+  function downloadJson(filename, data) {
+    var blob = new Blob([data], { type: 'application/json;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+  }
+
   function openExport() {
-    const data = TTStore.exportAll();
+    var data = TTStore.exportAll();
+    var today = TTStore.todayStr();
     openModal(`
       <div class="modal-title">导出数据</div>
       <div class="form-group">
-        <label class="form-label">复制以下 JSON 保存（含内容、设置与学习记录）：</label>
-        <textarea class="form-textarea" style="min-height:180px;font-size:12px;font-family:monospace" readonly id="export-text">${esc(data)}</textarea>
+        <label class="form-label">导出方式：</label>
+        <div style="display:flex;gap:10px;margin-top:8px">
+          <button class="btn-primary" id="export-download" style="flex:1">⬇ 下载 JSON 文件</button>
+          <button class="btn-cancel" id="export-copy" style="flex:1">📋 复制到剪贴板</button>
+        </div>
+        <div style="margin-top:12px;font-size:13px;color:var(--text-2)">
+          数据包含：内容库、设置、学习记录、考试记录、经验值。<br>
+          建议定期导出备份，以防浏览器数据丢失。
+        </div>
       </div>
       <div class="modal-actions">
-        <button class="btn-cancel" id="export-copy">复制</button>
-        <button class="btn-primary" id="export-close">关闭</button>
+        <button class="btn-cancel" id="export-close">关闭</button>
       </div>
     `);
     $('#export-close').addEventListener('click', closeModal);
-    $('#export-copy').addEventListener('click', () => {
-      const ta = $('#export-text');
-      ta.select();
-      try { document.execCommand('copy'); } catch (e) {}
-      toast('已复制到剪贴板');
+    $('#export-download').addEventListener('click', function () {
+      downloadJson('天天滚动_备份_' + today + '.json', data);
+      toast('已下载备份文件');
+      closeModal();
+    });
+    $('#export-copy').addEventListener('click', function () {
+      navigator.clipboard.writeText(data).then(function () {
+        toast('已复制到剪贴板');
+      }).catch(function () {
+        // fallback for older browsers
+        var ta = document.createElement('textarea');
+        ta.value = data;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); toast('已复制到剪贴板'); } catch (e) { toast('复制失败，请手动复制'); }
+        document.body.removeChild(ta);
+      });
+      closeModal();
     });
   }
 
@@ -2342,12 +2400,12 @@
         if (!('Notification' in window)) { toast('当前浏览器不支持通知'); return; }
         if (Notification.permission === 'denied') { toast('通知已被拒绝，请到浏览器设置中开启'); return; }
         if (Notification.permission === 'granted') {
-          new Notification('天天滚动 · 测试通知', { body: '如果看到这条通知，说明提醒功能正常 ✅', icon: 'icons/icon-192.png' });
+          new Notification('天天滚动 · 测试通知', { body: '如果看到这条通知，说明提醒功能正常 ✅', icon: 'icons/icon.svg' });
           toast('测试通知已发送');
         } else {
           Notification.requestPermission().then(perm => {
             if (perm === 'granted') {
-              new Notification('天天滚动', { body: '通知已开启，每天 ' + (TTStore.getSettings().remindTime || '20:00') + ' 提醒你学习 📚', icon: 'icons/icon-192.png' });
+              new Notification('天天滚动', { body: '通知已开启，每天 ' + (TTStore.getSettings().remindTime || '20:00') + ' 提醒你学习 📚', icon: 'icons/icon.svg' });
               toast('通知已开启');
             } else {
               toast('通知被拒绝，可在设置中重新开启');
@@ -2570,6 +2628,11 @@
         dark = s.themeMode === 'dark';
       }
       document.documentElement.classList.toggle('dark', dark);
+      // 动态更新浏览器顶栏颜色
+      var meta = document.getElementById('meta-theme-color');
+      if (meta) {
+        meta.content = dark ? '#1a251f' : '#2f8f6b';
+      }
     } catch (e) { /* 忽略 */ }
   }
   /** 监听系统主题变化，仅在 auto 模式下生效 */
@@ -2600,7 +2663,7 @@
     localStorage.setItem('ttgd.lastRemind', TTStore.todayStr());
     new Notification('天天滚动 · 学习提醒', {
       body: '今天还没学习哦，来复习几张卡片吧！',
-      icon: 'icons/icon-192.png'
+      icon: 'icons/icon.svg'
     });
   }
 
@@ -2636,6 +2699,139 @@
       console.error('渲染今日页失败', e);
     }
     startReminderCheck();
+    setupExamIdleTimeout();
+    setupKeyboardShortcuts();
+    setupSWUpdateListener();
+  }
+
+  /* ================= 考试空闲超时（离开标签页自动暂停） ================= */
+  function setupExamIdleTimeout() {
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden && App.exam && App.exam.state === 'running') {
+        // 记录离开时间，回来时自动暂停计时
+        App.exam._hiddenSince = Date.now();
+        App.exam._wasRunning = true;
+      } else if (!document.hidden && App.exam && App.exam._hiddenSince) {
+        // 回来时自动暂停，让用户选择继续
+        var elapsed = Date.now() - App.exam._hiddenSince;
+        if (elapsed > 30000 && App.exam._wasRunning) {
+          // 离开超过 30 秒，自动暂停考试
+          App.exam.state = 'paused';
+          App.exam._hiddenSince = null;
+          App.exam._wasRunning = false;
+          toast('⏸ 检测到长时间离开，考试已自动暂停');
+          var timerEl = document.getElementById('exam-timer');
+          if (timerEl) timerEl.textContent = '已暂停';
+        } else {
+          App.exam._hiddenSince = null;
+        }
+      }
+    });
+  }
+
+  /* ================= 键盘快捷键 ================= */
+  function setupKeyboardShortcuts() {
+    document.addEventListener('keydown', function (e) {
+      // 仅在非输入框中生效
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+
+      var tab = App.tab;
+
+      // 全局快捷键：Alt+数字 切换标签页
+      if (e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+        var tabs = ['today', 'practice', 'learn', 'library', 'stats'];
+        var idx = parseInt(e.key, 10);
+        if (idx >= 1 && idx <= tabs.length) {
+          e.preventDefault();
+          switchTab(tabs[idx - 1]);
+          return;
+        }
+      }
+
+      // 学习页面快捷键
+      if (tab === 'learn') {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          var exitBtn = document.getElementById('btn-exit-learn');
+          if (exitBtn) exitBtn.click();
+          return;
+        }
+
+        // 考试模式：空格暂停/继续
+        if (e.key === ' ' && App.exam) {
+          e.preventDefault();
+          var pauseBtn = document.querySelector('.exam-toggle-btn');
+          if (pauseBtn) pauseBtn.click();
+          return;
+        }
+
+        // 选择题：1-4 快速选择
+        if (e.key >= '1' && e.key <= '4' && !App.exam) {
+          var opts = document.querySelectorAll('.learn-body .option');
+          var idx = parseInt(e.key, 10) - 1;
+          if (opts[idx]) { opts[idx].click(); return; }
+        }
+
+        // 记忆卡：空格翻面，1-4 评级
+        if (e.key === ' ' && !App.exam) {
+          var flashcard = document.querySelector('.flashcard');
+          if (flashcard) {
+            e.preventDefault();
+            flashcard.click();
+            return;
+          }
+        }
+        if (e.key >= '1' && e.key <= '4' && !App.exam) {
+          var gradeBtns = document.querySelectorAll('.grade-btn');
+          var idx = parseInt(e.key, 10) - 1;
+          if (gradeBtns[idx]) { gradeBtns[idx].click(); return; }
+        }
+      }
+
+      // 内容库：Ctrl+F 聚焦搜索
+      if (tab === 'library' && (e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        var searchInput = document.getElementById('lib-search');
+        if (searchInput) searchInput.focus();
+      }
+    });
+  }
+
+  /* ================= Service Worker 更新监听 ================= */
+  function setupSWUpdateListener() {
+    if (!('serviceWorker' in navigator)) return;
+
+    // 监听 SW 发来的更新消息
+    navigator.serviceWorker.addEventListener('message', function (e) {
+      if (e.data && e.data.type === 'SW_UPDATED') {
+        // 有更新可用，提示用户刷新
+        var banner = document.createElement('div');
+        banner.style.cssText = 'position:fixed;bottom:80px;left:16px;right:16px;z-index:9999;background:#2f8f6b;color:#fff;border-radius:14px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 20px rgba(0,0,0,0.2);animation:fadeIn .3s ease';
+        banner.innerHTML = '<span style="font-size:14px;font-weight:600">🔄 新版本可用</span><button style="background:#fff;color:#2f8f6b;border:none;border-radius:8px;padding:6px 16px;font-size:14px;font-weight:600;cursor:pointer" id="sw-refresh-btn">刷新</button>';
+        document.body.appendChild(banner);
+        document.getElementById('sw-refresh-btn').addEventListener('click', function () {
+          banner.remove();
+          window.location.reload();
+        });
+        // 10 秒后自动消失
+        setTimeout(function () { if (banner.parentNode) banner.remove(); }, 10000);
+      }
+    });
+
+    // 检查 SW 是否有待更新
+    if (navigator.serviceWorker.controller) {
+      navigator.serviceWorker.ready.then(function (reg) {
+        reg.addEventListener('updatefound', function () {
+          var newSW = reg.installing;
+          newSW.addEventListener('statechange', function () {
+            if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+              // 新 SW 已安装，向它发送跳过等待消息
+              newSW.postMessage({ type: 'SKIP_WAITING' });
+            }
+          });
+        });
+      });
+    }
   }
 
   /** 移除初始示例题（按 _sample 标记，幂等；只删最初生成的 22 条） */
@@ -2658,9 +2854,10 @@
   function importBundled() {
     try {
       if (!window.TTBundledImageCards || !window.TTBundledImageCards.length) return;
-      // 清理旧版/失效图片地址的图卡（本地 127.0.0.1、相对路径等），避免残留破图
+      // 清理旧版本地地址（127.0.0.1 / localhost）的图片卡，保留用户导入的卡片
       const stale = TTStore.getContent().filter(x =>
-        x.masks && x.masks.length && x.image && x.image.indexOf(IMG_OSS_BASE) !== 0
+        x.masks && x.masks.length && x.image && 
+        (x.image.indexOf('127.0.0.1') >= 0 || x.image.indexOf('localhost') >= 0)
       );
       if (stale.length) TTStore.removeMany(stale.map(x => x.id));
       const existing = new Set(TTStore.getContent().map(c => c.image).filter(Boolean));

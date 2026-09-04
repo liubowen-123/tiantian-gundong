@@ -1071,3 +1071,375 @@ html.dark .dr-stat { background: #101713; }
 html.dark .dr-bar { background: linear-gradient(180deg, #3aa97d, #2f8f6b); }
 html.dark .sp-tip { background: #101713; }
 
+/* ===== 骨架屏（Skeleton Screen） ===== */
+.skeleton {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 16px 16px 24px;
+  animation: fadeIn .25s ease;
+  opacity: 1;
+  transition: opacity .4s ease;
+}
+.skeleton.sk-hide {
+  opacity: 0;
+  pointer-events: none;
+}
+@keyframes sk-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.sk-shine {
+  background: linear-gradient(90deg, #e8ece8 25%, #f0f4f0 50%, #e8ece8 75%);
+  background-size: 200% 100%;
+  animation: sk-shimmer 1.6s ease-in-out infinite;
+  border-radius: 8px;
+}
+html.dark .sk-shine {
+  background: linear-gradient(90deg, #1a251f 25%, #24352d 50%, #1a251f 75%);
+  background-size: 200% 100%;
+}
+.sk-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.sk-title { width: 120px; height: 28px; }
+.sk-btn { width: 38px; height: 38px; border-radius: 12px; }
+.sk-banner { height: 52px; border-radius: 16px; margin-bottom: 14px; }
+.sk-card { background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 14px; box-shadow: var(--shadow); }
+.sk-card-title { width: 80px; height: 18px; margin-bottom: 12px; }
+.sk-row { display: flex; align-items: center; gap: 16px; margin-top: 8px; }
+.sk-ring { width: 80px; height: 80px; border-radius: 50%; flex-shrink: 0; }
+.sk-line { height: 14px; width: 100%; }
+.sk-seg { display: flex; gap: 8px; margin: 8px 0 14px; }
+.sk-pill { height: 34px; flex: 1; border-radius: 20px; }
+.sk-big-btn { height: 48px; border-radius: 14px; margin-bottom: 14px; }
+.sk-task-row { height: 44px; border-radius: 12px; }
+
+
+/* ============================================================
+   ✨ v2 设计层 ·「墨绿学堂」（2026-09 视觉升级）
+   深翡翠 Hero + 琥珀点缀 / 毛玻璃导航 / SVG 图标胶囊
+   ============================================================ */
+:root {
+  --shadow-sm: 0 1px 2px rgba(23, 43, 34, .05), 0 4px 14px rgba(23, 43, 34, .05);
+  --shadow: 0 2px 6px rgba(23, 43, 34, .05), 0 12px 28px rgba(23, 43, 34, .08);
+  --shadow-lg: 0 4px 12px rgba(23, 43, 34, .07), 0 20px 48px rgba(23, 43, 34, .14);
+}
+
+/* 背景：暖白 → 淡薄荷 + 顶部翡翠微光 */
+body {
+  background:
+    radial-gradient(130% 55% at 50% -8%, rgba(47, 143, 107, .12), rgba(47, 143, 107, 0) 62%),
+    linear-gradient(180deg, #ebf4ef, #f4f8f6 42%, #eff5f2);
+  background-attachment: fixed;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 标题 */
+.app-title {
+  background: linear-gradient(92deg, #14533d, #1f7a58 55%, #2fa56f);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* 卡片：20px 圆角 + 双层细影 + 发丝边框 */
+.card, .stat-card { border-radius: 20px; border: 1px solid rgba(23, 43, 34, .06); }
+.lib-item, .practice-entry, .queue-item { transition: transform .18s ease, box-shadow .18s ease; }
+@media (hover: hover) {
+  .lib-item:hover, .practice-entry:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+}
+
+/* Hero 横幅：深翡翠渐变 + 琥珀微光 */
+.streak-banner {
+  background:
+    radial-gradient(90% 170% at 94% -45%, rgba(240, 178, 62, .38), rgba(240, 178, 62, 0) 56%),
+    linear-gradient(150deg, #14533d 0%, #1f7a58 55%, #2f9c6f 100%);
+  box-shadow: 0 12px 28px rgba(20, 83, 61, .30);
+}
+.goal-card {
+  background:
+    radial-gradient(105% 160% at 100% -25%, rgba(240, 178, 62, .30), rgba(240, 178, 62, 0) 52%),
+    linear-gradient(155deg, #123f2f, #1a6a4c 58%, #23915f);
+  box-shadow: 0 16px 36px rgba(18, 63, 47, .32);
+}
+.record-hero {
+  background:
+    radial-gradient(95% 170% at 96% -35%, rgba(240, 178, 62, .30), rgba(240, 178, 62, 0) 55%),
+    linear-gradient(140deg, #17493a, #1f7a58 60%, #2b9668);
+  box-shadow: 0 12px 26px rgba(23, 73, 58, .28);
+}
+
+/* 主按钮：渐变 + 高光描边 + 按压缩放 */
+.btn-primary {
+  background: linear-gradient(160deg, #1e7d5a, #27a06e 55%, #34b97f);
+  box-shadow: 0 10px 24px rgba(31, 125, 90, .34), inset 0 1px 0 rgba(255, 255, 255, .22);
+}
+.btn-primary:active { transform: scale(.96); box-shadow: 0 4px 12px rgba(31, 125, 90, .26); }
+
+/* 分段控件：iOS 白色滑块胶囊 */
+.seg { background: rgba(23, 43, 34, .07); box-shadow: inset 0 1px 2px rgba(23, 43, 34, .05); padding: 4px; }
+.seg-btn { color: var(--text-2); }
+.seg-btn.active {
+  background: #ffffff;
+  color: var(--primary-dark);
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(23, 43, 34, .13), 0 1px 2px rgba(23, 43, 34, .08);
+}
+
+/* 设置按钮：毛玻璃 + SVG 齿轮 */
+.icon-btn { background: rgba(255, 255, 255, .72); backdrop-filter: blur(8px); border: 1px solid rgba(23, 43, 34, .06); }
+.icon-btn svg { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+
+/* 底部导航：毛玻璃 + 图标胶囊 */
+.tabbar {
+  background: rgba(255, 255, 255, .78);
+  backdrop-filter: blur(18px) saturate(1.6);
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  border-top: 1px solid rgba(23, 43, 34, .07);
+  box-shadow: 0 -8px 28px rgba(23, 43, 34, .07);
+}
+.tab { gap: 3px; }
+.tab-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 46px; height: 28px; border-radius: 999px;
+  transition: background .22s ease, transform .22s ease, color .2s ease;
+}
+.tab-icon svg {
+  width: 22px; height: 22px; display: block;
+  fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  transition: transform .22s ease;
+}
+.tab.active { color: var(--primary-dark); }
+.tab.active .tab-icon { background: rgba(47, 143, 107, .14); transform: none; }
+.tab.active .tab-icon svg { transform: scale(1.06); stroke-width: 2.15; }
+.tab.active::before { content: none; }
+.tab-label { letter-spacing: .2px; }
+
+/* 数字排版 */
+.stat-num { font-variant-numeric: tabular-nums; }
+
+/* 焦点可见性 */
+:focus-visible { outline: 2px solid rgba(47, 143, 107, .55); outline-offset: 2px; }
+
+/* ---- v2 深色模式 ---- */
+html.dark body {
+  background:
+    radial-gradient(130% 55% at 50% -8%, rgba(58, 169, 125, .10), rgba(58, 169, 125, 0) 60%),
+    linear-gradient(180deg, #0c1310, #121b16 45%, #0f1613);
+  background-attachment: fixed;
+}
+html.dark .app-title { background: linear-gradient(92deg, #7fd7ab, #4fc08f); -webkit-background-clip: text; background-clip: text; color: transparent; }
+html.dark .card, html.dark .stat-card { border-color: rgba(255, 255, 255, .05); }
+html.dark .seg { background: rgba(255, 255, 255, .06); box-shadow: none; }
+html.dark .seg-btn.active { background: #26473a; color: #8fe0b6; box-shadow: 0 2px 8px rgba(0, 0, 0, .45); }
+html.dark .tabbar { background: rgba(13, 20, 16, .78); border-top-color: rgba(255, 255, 255, .06); box-shadow: 0 -8px 28px rgba(0, 0, 0, .4); }
+html.dark .tab.active { color: #5fce9e; }
+html.dark .tab.active .tab-icon { background: rgba(79, 192, 143, .17); }
+html.dark .icon-btn { background: rgba(24, 34, 29, .72); border-color: rgba(255, 255, 255, .07); }
+html.dark .btn-primary { box-shadow: 0 10px 24px rgba(31, 125, 90, .30), inset 0 1px 0 rgba(255, 255, 255, .14); }
+
+/* ============================================================
+   🌿 v3 设计层 ·「六科一色 · 医学课堂」（2026-09 视觉升级）
+   六科科目色贯穿全站 / 首页封面化 / 图标胶囊 / 纸感点阵背景
+   ============================================================ */
+
+/* --- 六科科目识别色 --- */
+:root {
+  --sub-phys: #e8734a;      /* 生理学   珊瑚橙 */
+  --sub-biochem: #4f6fd8;   /* 生物化学 靛蓝   */
+  --sub-path: #8b5ec7;      /* 病理学   紫藤   */
+  --sub-medi: #159a9a;      /* 内科学   青绿   */
+  --sub-surg: #d99a14;      /* 外科学   琥珀   */
+  --sub-diag: #d45c8a;      /* 诊断学   玫红   */
+}
+
+/* 科目 → 色板映射（统一取 --m-color 主色 / --m-soft 浅底）
+   注意：默认色用 :where() 把特异性降为 0，保证科目色映射始终优先 */
+:where(.mastery-row, .subj-row, .tag.sub, .lib-group-subject-title) {
+  --m-color: var(--primary);
+  --m-soft: var(--primary-light);
+}
+[data-subject="生理学"]   { --m-color: #e8734a; --m-soft: #fdeee7; }
+[data-subject="生物化学"] { --m-color: #4f6fd8; --m-soft: #e9edfb; }
+[data-subject="病理学"]   { --m-color: #8b5ec7; --m-soft: #f2ebfa; }
+[data-subject="内科学"]   { --m-color: #159a9a; --m-soft: #e3f4f4; }
+[data-subject="外科学"]   { --m-color: #d99a14; --m-soft: #faf3e0; }
+[data-subject="诊断学"]   { --m-color: #d45c8a; --m-soft: #fbeaf1; }
+
+/* ---- 背景：暖白纸感 + 顶部翡翠光晕 + 极淡点阵（课本网格意象） ---- */
+body {
+  background:
+    radial-gradient(130% 55% at 50% -8%, rgba(47, 143, 107, .13), rgba(47, 143, 107, 0) 62%),
+    radial-gradient(rgba(31, 80, 60, .032) 1px, transparent 1.5px),
+    linear-gradient(180deg, #eaf3ee, #f4f8f5 42%, #eef4f1);
+  background-size: auto, 24px 24px, auto;
+  background-attachment: fixed;
+}
+
+/* ---- 页头封面：琥珀+翡翠光斑，让标题区有呼吸感 ---- */
+.page-header { position: relative; }
+.page-header::before {
+  content: '';
+  position: absolute;
+  top: -14px; left: -12px; right: -12px;
+  height: 168px;
+  background:
+    radial-gradient(120px 90px at 88% 18%, rgba(217, 154, 20, .15), transparent 70%),
+    radial-gradient(180px 120px at 6% 26%, rgba(47, 143, 107, .16), transparent 72%),
+    radial-gradient(130px 90px at 52% 0%, rgba(47, 143, 107, .10), transparent 70%);
+  border-radius: 30px;
+  pointer-events: none;
+  z-index: 0;
+}
+.page-header > * { position: relative; z-index: 1; }
+
+.icon-btn {
+  background: rgba(255, 255, 255, .8);
+  box-shadow: 0 6px 18px rgba(23, 43, 34, .08), inset 0 1px 0 rgba(255, 255, 255, .65);
+}
+
+/* ---- 今日封面卡组：streak / 目标卡 形成有层次的锚点 ---- */
+.streak-banner { position: relative; overflow: hidden; }
+.streak-banner::after {
+  content: '';
+  position: absolute; left: 14%; right: 14%; bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent);
+}
+
+/* 目标卡：同心圆（记忆周期意象）+ 琥珀高光 */
+.goal-card { position: relative; overflow: hidden; }
+.goal-card::before {
+  content: '';
+  position: absolute; right: -52px; top: -52px;
+  width: 156px; height: 156px;
+  border-radius: 50%;
+  border: 1.6px dashed rgba(255, 255, 255, .26);
+  box-shadow: 0 0 0 22px rgba(255, 255, 255, .045), 0 0 0 44px rgba(255, 255, 255, .03);
+  pointer-events: none;
+}
+.goal-card::after {
+  content: '';
+  position: absolute; left: -42px; bottom: -76px;
+  width: 156px; height: 156px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, .13), transparent 66%);
+  pointer-events: none;
+}
+.goal-head, .goal-scroll { position: relative; z-index: 1; }
+.mini-round-btn {
+  border: 1px solid rgba(255, 255, 255, .26);
+  background: rgba(255, 255, 255, .13);
+  backdrop-filter: blur(4px);
+}
+
+/* 每日记录卡：暖色点缀，与白卡区分 */
+.record-card {
+  border: 1px solid rgba(47, 143, 107, .10);
+  background: linear-gradient(135deg, #ffffff, #f6fbf8);
+}
+.record-title { display: flex; align-items: center; gap: 7px; }
+.record-title::before {
+  content: '';
+  width: 8px; height: 8px; border-radius: 50%;
+  background: linear-gradient(135deg, #2f8f6b, #4fc08f);
+  box-shadow: 0 0 0 3px rgba(47, 143, 107, .13);
+}
+.record-arrow { color: var(--primary); font-weight: 700; }
+
+/* ---- 掌握度 / 练习中心：科目色点 + 同色进度条 ---- */
+.mastery-name {
+  width: auto; min-width: 66px;
+  display: inline-flex; align-items: center; gap: 7px;
+  text-align: left;
+  font-weight: 600; color: var(--text-2);
+}
+.mastery-name::before {
+  content: ''; flex-shrink: 0;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--m-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--m-color) 15%, transparent);
+}
+.mastery-fill {
+  background: linear-gradient(90deg, var(--m-color), color-mix(in srgb, var(--m-color) 60%, #ffffff));
+}
+.mastery-num { color: var(--m-color); font-weight: 700; }
+
+.subj-name { display: inline-flex; align-items: center; gap: 6px; }
+.subj-name::before {
+  content: ''; flex-shrink: 0;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--m-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--m-color) 14%, transparent);
+}
+.subj-row-fill { background: linear-gradient(90deg, var(--m-color), color-mix(in srgb, var(--m-color) 60%, #ffffff)); }
+.subj-pct { color: var(--m-color); }
+
+/* 科目标签：按科目着色 */
+.tag.sub { background: var(--m-soft); color: var(--m-color); font-weight: 600; letter-spacing: .2px; }
+
+/* 内容库分组标题：色点 + 着色 */
+.lib-group-subject-title { gap: 6px; }
+.lib-group-subject-title::before {
+  content: ''; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--m-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--m-color) 14%, transparent);
+}
+
+/* ---- 图标胶囊：任务 / 练习入口 ---- */
+.task-icon {
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: inset 0 -3px 0 rgba(31, 59, 48, .05), inset 0 0 0 1px rgba(31, 59, 48, .04);
+}
+.task-row[data-action="quiz"] .task-icon  { background: linear-gradient(135deg, #fdeee7, #f6d9cb); }
+.task-row[data-action="card"] .task-icon  { background: linear-gradient(135deg, #e9edfb, #dbe4f8); }
+.task-row[data-action="wrong"] .task-icon { background: linear-gradient(135deg, #fbeae9, #f6d4d3); }
+
+.pe-icon { border-radius: 14px; box-shadow: inset 0 -3px 0 rgba(31, 59, 48, .05); }
+.pe-icon svg { width: 22px; height: 22px; display: block; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---- 统计页：四张数字卡按语义分色 ---- */
+.stat-card:nth-child(1) .stat-num { color: var(--sub-biochem); }
+.stat-card:nth-child(2) .stat-num { color: var(--sub-path); }
+.stat-card:nth-child(3) .stat-num { color: var(--sub-medi); }
+.stat-card:nth-child(4) .stat-num { color: var(--sub-surg); }
+
+/* ---- 克制的入场微动效 ---- */
+.page .card, .page .practice-entry, .page .lib-item, .page .stat-card {
+  animation: v3CardIn .42s ease both;
+}
+@keyframes v3CardIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---- 数字排版 ---- */
+.stat-num, .mastery-num, .subj-pct, .goal-scroll-pct, .dr-stat-num { font-variant-numeric: tabular-nums; }
+
+/* ---- v3 深色模式适配 ---- */
+html.dark body {
+  background:
+    radial-gradient(130% 55% at 50% -8%, rgba(58, 169, 125, .09), rgba(58, 169, 125, 0) 60%),
+    radial-gradient(rgba(120, 160, 140, .05) 1px, transparent 1.5px),
+    linear-gradient(180deg, #0c1310, #121b16 45%, #0f1613);
+  background-size: auto, 24px 24px, auto;
+  background-attachment: fixed;
+}
+html.dark [data-subject="生理学"]   { --m-color: #f08a64; --m-soft: rgba(232, 115, 74, .16); }
+html.dark [data-subject="生物化学"] { --m-color: #7f96f0; --m-soft: rgba(79, 111, 216, .18); }
+html.dark [data-subject="病理学"]   { --m-color: #ad8ae8; --m-soft: rgba(139, 94, 199, .18); }
+html.dark [data-subject="内科学"]   { --m-color: #35c3c3; --m-soft: rgba(21, 154, 154, .18); }
+html.dark [data-subject="外科学"]   { --m-color: #ecb73f; --m-soft: rgba(217, 154, 20, .16); }
+html.dark [data-subject="诊断学"]   { --m-color: #e98bb2; --m-soft: rgba(212, 92, 138, .18); }
+html.dark .tag.sub { background: var(--m-soft); color: var(--m-color); }
+html.dark .mastery-fill { background: linear-gradient(90deg, var(--m-color), color-mix(in srgb, var(--m-color) 55%, #18221d)); }
+html.dark .subj-row-fill { background: linear-gradient(90deg, var(--m-color), color-mix(in srgb, var(--m-color) 55%, #18221d)); }
+html.dark .mastery-name::before, html.dark .subj-name::before, html.dark .lib-group-subject-title::before {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--m-color) 22%, transparent);
+}
+html.dark .task-row[data-action="quiz"] .task-icon  { background: linear-gradient(135deg, #3a2a22, #4a2f24); }
+html.dark .task-row[data-action="card"] .task-icon  { background: linear-gradient(135deg, #222b42, #29314e); }
+html.dark .task-row[data-action="wrong"] .task-icon { background: linear-gradient(135deg, #3a2225, #45272a); }
+html.dark .icon-btn { background: rgba(24, 34, 29, .78); }
+html.dark .pe-icon { box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .25); }
+html.dark .record-card { background: linear-gradient(135deg, #18221d, #16201b); border-color: rgba(255, 255, 255, .05); }
+
