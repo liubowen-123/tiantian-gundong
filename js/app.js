@@ -2989,6 +2989,7 @@
         '<div class="pw-desc">当前进行到 Day ' + plan.currentDay + ' / ' + PLAN_TOTAL + '。' +
         '点击恢复继续按计划学习。</div>' +
         '<button class="btn-primary" id="plan-resume">▶ 恢复计划</button>' +
+        '<button class="plan-btn" id="plan-restart" style="margin-top:10px;width:100%">🔄 重新开始</button>' +
       '</div>' +
       '<div class="modal-actions"><button class="btn-cancel" id="plan-close">关闭</button></div>';
   }
@@ -3034,6 +3035,7 @@
         '<div class="plan-actions">' +
           '<button class="plan-btn" id="plan-rest">休息1天</button>' +
           '<button class="plan-btn" id="plan-pause">暂停</button>' +
+          '<button class="plan-btn" id="plan-restart">🔄 重新开始</button>' +
         '</div>' +
       '</div>' +
       '<div class="plan-progress">' +
@@ -3068,8 +3070,13 @@
     });
     const restart = document.getElementById('plan-restart');
     if (restart) restart.addEventListener('click', () => {
-      if (!confirm('重新开始会清空当前计划进度，确定吗？')) return;
-      plan.started = false; plan.currentDay = 1; plan.done = {}; plan.rest = {}; plan.paused = false;
+      if (!confirm('重新开始会清空当前计划全部进度，并从第 1 天重新开始。确定吗？')) return;
+      const today = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      plan.started = true;
+      plan.startDate = today.getFullYear() + '-' + pad(today.getMonth() + 1) + '-' + pad(today.getDate());
+      plan.currentDay = 1;
+      plan.done = {}; plan.rest = {}; plan.paused = false;
       savePlan(plan);
       renderToday();
       openPlan();
