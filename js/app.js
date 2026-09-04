@@ -154,6 +154,13 @@
     $('#rec-learn-info').textContent = lhDoing > 0
       ? `${lhDoing} 个未完成 · 共 ${learnHist.length} 次记录`
       : (learnHist.length > 0 ? `共 ${learnHist.length} 次记录` : '暂无学习记录');
+    // 学习计划入口
+    const planSt = getPlan();
+    const planInfo = $('#rec-plan-info');
+    if (!planSt.started) planInfo.textContent = '67 天滚动表 · 未开始';
+    else if (planSt.paused) planInfo.textContent = '已暂停 · Day ' + planSt.currentDay;
+    else planInfo.textContent = 'Day ' + planSt.currentDay + ' / 67 · ' +
+      (planDayAllDone(planSt, planSt.currentDay) ? '今日已完成 🎉' : '进行中');
 
     // 学习模式
     $$('#mode-seg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === App.learnMode));
@@ -2609,7 +2616,7 @@
   function openLearnHistory() {
     const hist = getLearnHistory();
     if (hist.length === 0) { toast('暂无学习记录'); return; }
-    let html = '<div class="modal-title">学习记录</div>';
+    let html = '<div class="modal-title">📚 学习记录</div>';
     html += '<div class="learn-history-list">';
     hist.forEach(h => { html += historyItemHtml(h); });
     html += '</div>';
@@ -2670,6 +2677,234 @@
           '<button class="btn-ghost lhi-btn lhi-del" data-delhist="' + esc(h.id) + '">删除</button>' +
         '</div>' +
       '</div>';
+  }
+
+  /* ================= 学习计划（67天滚动表） ================= */
+  const PLAN_KEY = 'ttgd.plan.v1';
+  const PLAN_TOTAL = (window.TTPlanData && window.TTPlanData.length) || 67;
+
+  function getPlan() {
+    let p = null;
+    try { p = JSON.parse(localStorage.getItem(PLAN_KEY) || 'null'); } catch (e) { p = null; }
+    if (!p) p = { started: false, startDate: null, currentDay: 1, done: {}, rest: {}, paused: false };
+    if (!p.done) p.done = {};
+    if (!p.rest) p.rest = {};
+    return p;
+  }
+  function savePlan(p) {
+    try { localStorage.setItem(PLAN_KEY, JSON.stringify(p)); } catch (e) {} 
+  }
+  function planDayRow(d) {
+    const data = window.TTPlanData || [];
+    return data.find(x => x.day === d) || null;
+  }
+  /** 某天的任务列表：第1轮新学 + 第2轮(D2次日) + 第3轮(D5隔4天) + 生化第4项 */
+  function planDayTasks(day) {
+    const row = planDayRow(day);
+    if (!row) return [];
+    const tasks = [];
+    tasks.push({ key: 'new', round: '第1轮', title: row.content, sub: '看讲义，不懂的地方回看录播' });
+    const d2 = planDayRow(day - 1);
+    if (d2) tasks.push({ key: 'd2', round: '第2轮', title: d2.content, sub: '刷近20年真题，错题以题带动复习' });
+    const d5 = planDayRow(day - 4);
+    if (d5) tasks.push({ key: 'd5', round: '第3轮', title: d5.content, sub: '背讲义内容，重点关注红色等重点字词' });
+    if (row.bio) tasks.push({ key: 'bio', round: '生化任务', bio: true, title: row.bio, sub: '完成每日生化任务' });
+    return tasks;
+  }
+  function planDayDone(plan, day, key) {
+    return !!(plan.done && plan.done[day] && plan.done[day][key]);
+  }
+  function planDayAllDone(plan, day) {
+    const tasks = planDayTasks(day);
+    if (!tasks.length) return false;
+    return tasks.every(t => planDayDone(plan, day, t.key));
+  }
+  function planDateText(startDate, day) {
+    const base = new Date(startDate + 'T00:00:00');
+    if (isNaN(base.getTime())) return '';
+    base.setDate(base.getDate() + (day - 1));
+    return (base.getMonth() + 1) + '/' + base.getDate();
+  }
+  const PLAN_ROUND_CLS = { new: 'r1', d2: 'r2', d5: 'r3', bio: 'r4' };
+  function planTaskHtml(task, done) {
+    const roundCls = 'pt-round ' + (PLAN_ROUND_CLS[task.key] || 'r1');
+    return '' +
+      '<div class="plan-task' + (done ? ' done' : '') + '" data-key="' + task.key + '">' +
+        '<div class="pt-top">' +
+          '<span class="' + roundCls + '">' + task.round + '</span>' +
+          '<span class="pt-check">' + (done ? '✓' : '○') + '</span>' +
+        '</div>' +
+        '<div class="pt-title">' + esc(task.title) + '</div>' +
+        '<div class="pt-sub">' + esc(task.sub) + '</div>' +
+      '</div>';
+  }
+  function planGridHtml(plan) {
+    let cells = '';
+    for (let d = 1; d <= PLAN_TOTAL; d++) {
+      let cls = 'pg-cell';
+      if (plan.rest && plan.rest[d]) cls += ' rest';
+      else if (planDayAllDone(plan, d)) cls += ' ok';
+      if (d === plan.currentDay) cls += ' now';
+      const label = planDayAllDone(plan, d) ? '✓' : (plan.rest && plan.rest[d] ? '休' : d);
+      cells += '<div class="' + cls + '"><span>' + label + '</span><span class="pg-d">D' + d + '</span></div>';
+    }
+    return '<div class="plan-grid">' + cells + '</div>' +
+      '<div class="plan-grid-tip">绿框=今日 · 绿色=已完成 · 黄色=休息 · 点击任务可标记完成</div>';
+  }
+  function planWelcomeHtml(plan) {
+    return '' +
+      '<div class="modal-title">📅 学习计划</div>' +
+      '<div class="plan-welcome">' +
+        '<div class="pw-emoji">🗓️</div>' +
+        '<div class="pw-title">天天·西综二轮 67 天滚动表</div>' +
+        '<div class="pw-desc">按艾宾浩斯滚动复习：每天新学 1 个内容，' +
+        '第 2 天复习前一天（第2轮）、第 5 天复习四天前（第3轮），' +
+        '外加每日生化任务。完成当天全部任务后自动进入下一天。</div>' +
+        '<button class="btn-primary" id="plan-start">🚀 开始第 1 天</button>' +
+      '</div>' +
+      '<div class="modal-actions"><button class="btn-cancel" id="plan-close">关闭</button></div>';
+  }
+  function planPausedHtml(plan) {
+    return '' +
+      '<div class="modal-title">📅 学习计划</div>' +
+      '<div class="plan-welcome">' +
+        '<div class="pw-emoji">⏸️</div>' +
+        '<div class="pw-title">计划已暂停</div>' +
+        '<div class="pw-desc">当前进行到 Day ' + plan.currentDay + ' / ' + PLAN_TOTAL + '。' +
+        '点击恢复继续按计划学习。</div>' +
+        '<button class="btn-primary" id="plan-resume">▶ 恢复计划</button>' +
+      '</div>' +
+      '<div class="modal-actions"><button class="btn-cancel" id="plan-close">关闭</button></div>';
+  }
+  function planFinishedHtml(plan) {
+    return '' +
+      '<div class="modal-title">📅 学习计划</div>' +
+      '<div class="plan-welcome">' +
+        '<div class="pw-emoji">🏆</div>' +
+        '<div class="pw-title">67 天计划全部完成！</div>' +
+        '<div class="pw-desc">恭喜你完成整个二轮滚动计划，坚持就是胜利！</div>' +
+        planGridHtml(plan) +
+        '<button class="btn-primary" id="plan-restart" style="margin-top:14px;width:100%">🔄 重新开始计划</button>' +
+      '</div>' +
+      '<div class="modal-actions"><button class="btn-cancel" id="plan-close">关闭</button></div>';
+  }
+  function planTodayHtml(plan) {
+    const day = plan.currentDay;
+    const row = planDayRow(day);
+    const tasks = planDayTasks(day);
+    const allDone = planDayAllDone(plan, day);
+    const doneCount = tasks.filter(t => planDayDone(plan, day, t.key)).length;
+    const pct = Math.round(doneCount / tasks.length * 100);
+    const rest = plan.rest && plan.rest[day];
+    let listHtml;
+    if (rest) {
+      listHtml = '<div class="plan-done-banner"><b>😴 今日已休息</b><div style="font-size:12px;color:var(--text-2);margin-top:4px">休息日不计入学习任务，点下方按钮进入明天。</div>' +
+        '<button class="btn-primary" id="plan-next">进入第 ' + (day + 1) + ' 天 ›</button></div>';
+    } else {
+      listHtml = '<div class="plan-task-list">' + tasks.map(t => planTaskHtml(t, planDayDone(plan, day, t.key))).join('') + '</div>';
+      if (allDone) {
+        listHtml += '<div class="plan-done-banner"><b>🎉 第 ' + day + ' 天任务完成！</b>' +
+          '<div style="font-size:12px;color:var(--text-2);margin-top:4px">已掌握今天的内容，明天见。</div>' +
+          '<button class="btn-primary" id="plan-next">进入第 ' + (day + 1) + ' 天 ›</button></div>';
+      }
+    }
+    return '' +
+      '<div class="plan-head">' +
+        '<div class="plan-head-left">' +
+          '<span class="plan-title">🗓️ 天天·67天滚动表</span>' +
+          '<span class="plan-day-badge">Day ' + day + '</span>' +
+          '<span class="plan-date">' + planDateText(plan.startDate, day) + '</span>' +
+        '</div>' +
+        '<div class="plan-actions">' +
+          '<button class="plan-btn" id="plan-rest">休息1天</button>' +
+          '<button class="plan-btn" id="plan-pause">暂停</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="plan-progress">' +
+        '<div class="plan-progress-track"><div class="plan-progress-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="plan-progress-text">今日完成 ' + doneCount + ' / ' + tasks.length + ' · 整体 Day ' + day + ' / ' + PLAN_TOTAL + '</div>' +
+      '</div>' +
+      listHtml +
+      planGridHtml(plan) +
+      '<div class="modal-actions"><button class="btn-cancel" id="plan-close">关闭</button></div>';
+  }
+  function bindPlanModal(plan) {
+    const close = document.getElementById('plan-close');
+    if (close) close.addEventListener('click', closeModal);
+    const start = document.getElementById('plan-start');
+    if (start) start.addEventListener('click', () => {
+      const today = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      plan.started = true;
+      plan.startDate = today.getFullYear() + '-' + pad(today.getMonth() + 1) + '-' + pad(today.getDate());
+      plan.currentDay = 1;
+      plan.paused = false;
+      savePlan(plan);
+      renderToday();
+      openPlan();
+    });
+    const resume = document.getElementById('plan-resume');
+    if (resume) resume.addEventListener('click', () => {
+      plan.paused = false;
+      savePlan(plan);
+      renderToday();
+      openPlan();
+    });
+    const restart = document.getElementById('plan-restart');
+    if (restart) restart.addEventListener('click', () => {
+      if (!confirm('重新开始会清空当前计划进度，确定吗？')) return;
+      plan.started = false; plan.currentDay = 1; plan.done = {}; plan.rest = {}; plan.paused = false;
+      savePlan(plan);
+      renderToday();
+      openPlan();
+    });
+    const restBtn = document.getElementById('plan-rest');
+    if (restBtn) restBtn.addEventListener('click', () => {
+      const day = plan.currentDay;
+      if (!plan.rest) plan.rest = {};
+      plan.rest[day] = true;
+      savePlan(plan);
+      renderToday();
+      openPlan();
+    });
+    const pauseBtn = document.getElementById('plan-pause');
+    if (pauseBtn) pauseBtn.addEventListener('click', () => {
+      plan.paused = true;
+      savePlan(plan);
+      renderToday();
+      openPlan();
+    });
+    const next = document.getElementById('plan-next');
+    if (next) next.addEventListener('click', () => {
+      plan.currentDay += 1;
+      savePlan(plan);
+      renderToday();
+      openPlan();
+    });
+    // 任务点击：标记完成（划删除线变暗淡）
+    document.querySelectorAll('#modal-mask .plan-task').forEach(el => {
+      el.addEventListener('click', () => {
+        const key = el.dataset.key;
+        const day = plan.currentDay;
+        if (!plan.done[day]) plan.done[day] = {};
+        if (planDayDone(plan, day, key)) delete plan.done[day][key];
+        else plan.done[day][key] = true;
+        savePlan(plan);
+        renderToday();
+        openPlan();
+      });
+    });
+  }
+  /** 打开学习计划 */
+  function openPlan() {
+    const plan = getPlan();
+    let html;
+    if (!plan.started) html = planWelcomeHtml(plan);
+    else if (plan.paused) html = planPausedHtml(plan);
+    else if (plan.currentDay > PLAN_TOTAL) html = planFinishedHtml(plan);
+    else html = planTodayHtml(plan);
+    openModal(html);
+    bindPlanModal(getPlan());
   }
 
   /* ================= 事件绑定 & 启动 ================= */
@@ -2741,6 +2976,8 @@
     if (rcToday) rcToday.addEventListener('click', () => openDailyRecord());
     const rcLearn = document.getElementById('record-card-learn');
     if (rcLearn) rcLearn.addEventListener('click', openLearnHistory);
+    const rcPlan = document.getElementById('record-card-plan');
+    if (rcPlan) rcPlan.addEventListener('click', openPlan);
     $('#entry-exam').addEventListener('click', openExam);
     $('#entry-wrong').addEventListener('click', openWrongBook);
     on('#entry-img', 'click', openImageBrowse);
