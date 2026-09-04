@@ -75,7 +75,7 @@
     panel.innerHTML =
       '<div class="tt-ai-head">' +
         '<span class="t">AI 助教</span>' +
-        '<span class="s">Qwen2.5 · 免费</span>' +
+        '<span class="s">DeepSeek-V3</span>' +
         '<button id="tt-ai-clear" title="清空对话">🗑</button>' +
         '<button id="tt-ai-close" title="关闭">✕</button>' +
       '</div>' +
