@@ -1865,3 +1865,83 @@ html.dark .browse-search-count { color: #6e857a; }
   width: 4px; height: 18px; border-radius: 4px; background: var(--m-color); opacity: .9;
 }
 .img-ch-group[data-subject] .img-ch-row:active::before { opacity: .55; }
+
+
+/* ============================================================
+   平板 / 宽屏自适应（2026-09）
+   手机端保持原样；>=640px 起放大字号与触控目标、加宽布局，
+   >=1024px 弹窗居中，充分利用平板与桌面屏宽。
+   ============================================================ */
+@media (min-width: 640px) {
+  #app { max-width: 880px; }
+  .tabbar { max-width: 880px; }
+  .modal { max-width: 760px; }
+
+  /* 页面与间距 */
+  .page { padding: 24px 24px 32px; }
+  .app-title { font-size: 30px; }
+  .app-subtitle { font-size: 14px; }
+  .icon-btn { width: 46px; height: 46px; font-size: 21px; border-radius: 14px; }
+
+  /* 卡片 */
+  .card { padding: 22px; margin-bottom: 16px; }
+  .card-title { font-size: 18px; }
+  .card-desc { font-size: 15.5px; }
+  .card-sub { font-size: 13.5px; }
+  .progress-card { padding: 26px 22px; gap: 26px; }
+  .ring-wrap, .ring { width: 150px; height: 150px; }
+  .stat-num { font-size: 26px; }
+  .stat-label { font-size: 13px; }
+  .ring-pct { font-size: 30px; }
+  .ring-label { font-size: 13px; }
+
+  /* 按钮与表单 */
+  .btn-primary { font-size: 17px; padding: 17px; border-radius: 16px; }
+  .btn-cancel, .btn-ghost { font-size: 15px; padding: 12px 18px; }
+  .form-label { font-size: 15px; }
+  .form-input, .form-select, .form-textarea { padding: 13px 14px; font-size: 16px; border-radius: 12px; }
+
+  /* 底部导航 */
+  .tab-icon { font-size: 26px; }
+  .tab-label { font-size: 14px; }
+  .tabbar { height: calc(var(--tabbar-h) + 10px + env(safe-area-inset-bottom)); }
+
+  /* 弹窗 */
+  .modal { padding: 26px 24px calc(28px + env(safe-area-inset-bottom)); }
+  .modal-title { font-size: 21px; }
+
+  /* 列表行：章节 / 看图卡多选 */
+  .ch-row { padding: 14px 16px; }
+  .ch-thumb { width: 66px; height: 50px; border-radius: 10px; }
+  .ch-name { font-size: 17px; }
+  .ch-count { font-size: 14px; }
+  .ch-toggle { font-size: 12px; padding: 6px 13px; }
+  .img-ch-row { padding: 12px 8px; }
+  .img-ch-name { font-size: 16.5px; }
+  .img-ch-count { font-size: 14px; }
+  .img-ch-list { max-height: 460px; }
+  .img-ch-subj { font-size: 15px; padding: 9px 14px; }
+  .img-ch-tab { font-size: 15px; padding: 8px 16px; }
+
+  /* 看图卡：科目卡 / 图片网格 */
+  .subj-card-icon { width: 52px; height: 52px; font-size: 24px; }
+  .subj-card-name { font-size: 19px; }
+  .subj-card-count { font-size: 14px; }
+  .img-grid { grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .img-cell-img { height: 150px; border-radius: 12px; }
+  .img-grid-tip { font-size: 14px; }
+
+  /* 今日页入口卡 */
+  .entry-card .entry-icon { width: 46px; height: 46px; font-size: 22px; }
+}
+
+/* 大平板 / 桌面：弹窗居中、进一步放大 */
+@media (min-width: 1024px) {
+  #app { max-width: 960px; }
+  .tabbar { max-width: 960px; }
+  .modal-mask { align-items: center; }
+  .modal { border-radius: 26px; max-width: 820px; }
+  .page { padding: 28px 32px 40px; }
+  .app-title { font-size: 34px; }
+  .img-grid { grid-template-columns: repeat(5, 1fr); }
+}
