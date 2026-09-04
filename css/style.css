@@ -1670,3 +1670,198 @@ html.dark .plan-welcome .pw-emoji { background: linear-gradient(135deg, #12301f,
 .pt-learn:active { transform: scale(.95); }
 .plan-task.done .pt-learn { opacity: .45; }
 html.dark .pt-learn { border-color: rgba(79, 178, 134, .3); color: #7fd6ae; background: rgba(47, 158, 120, .14); }
+
+/* ================= v7 看图卡多选 · 学科合并（筛选 / 折叠 / 组内全选） ================= */
+.img-ch-tabs {
+  display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 4px;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.img-ch-tabs::-webkit-scrollbar { display: none; }
+.img-ch-tab {
+  flex-shrink: 0;
+  border: 1.5px solid var(--border); background: var(--card); color: var(--text-2);
+  border-radius: 999px; padding: 6px 14px; font-size: 13px; cursor: pointer;
+  transition: all .15s;
+}
+.img-ch-tab.active {
+  border-color: var(--primary); background: var(--primary-light);
+  color: var(--primary-dark); font-weight: 700;
+}
+.img-ch-group { display: flex; flex-direction: column; }
+.img-ch-subj {
+  display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;
+  transition: opacity .15s;
+}
+.img-ch-subj:active { opacity: .7; }
+.img-ch-subj .ics-name { flex: 1; }
+.img-ch-subj .ics-tools { display: inline-flex; gap: 2px; }
+.ics-btn {
+  border: none; background: transparent; color: var(--text-2);
+  font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 6px; cursor: pointer;
+  transition: background .15s;
+}
+.ics-btn:hover { background: rgba(47, 143, 107, .10); }
+.ics-btn:active { transform: scale(.94); }
+.ics-caret { color: var(--text-3); font-size: 11px; width: 14px; text-align: center; }
+.img-ch-group-body { display: flex; flex-direction: column; }
+.img-ch-group.collapsed .img-ch-group-body { display: none; }
+html.dark .img-ch-tab { background: #101713; border-color: #24352d; color: #a8bcb1; }
+html.dark .img-ch-tab.active { border-color: #2f8f6b; background: #1d3a2e; color: #7fd7ab; }
+html.dark .ics-btn:hover { background: rgba(79, 192, 143, .14); }
+
+/* ============================================================
+   🎯 taste 精修层 ·「一色到底 · 有温度的精致」（2026-09）
+   依据 design-taste-frontend（taste-skill）视觉审计结论：
+   1. 色彩锁定：全站统一 emerald 主色 + amber 点缀，消除练习页横幅与
+      学习计划模块的蓝色偏离（见 skill 4.2 Color Consistency Lock）
+   2. 排版：标题层级加粗、字距收紧，数字统一等宽
+   3. 触感：桌面 hover 微动效 + 主按钮光泽扫过
+   4. 动效克制：尊重 prefers-reduced-motion（见 skill 6.B）
+   5. 桌面呈现：宽屏下 App 呈卡片式预览框
+   6. 细节：底部弹窗把手 / 选区颜色 / 滚动回弹
+   ============================================================ */
+
+/* ---- 色彩锁定：练习页「以题带动」横幅 蓝 → 翡翠（与首页目标卡同族） ---- */
+.record-hero {
+  background:
+    radial-gradient(95% 170% at 96% -35%, rgba(240, 178, 62, .34), rgba(240, 178, 62, 0) 55%),
+    linear-gradient(140deg, #123f2f 0%, #1a6a4c 58%, #23915f 100%);
+  box-shadow: 0 14px 30px rgba(18, 63, 47, .30);
+}
+
+/* ---- 色彩锁定：学习计划模块 蓝 → 琥珀（融入 amber 点缀，保留模块区分度） ---- */
+.plan-record-card {
+  border-color: rgba(217, 154, 20, .24);
+  background: linear-gradient(135deg, #fdf7e8, #fffdf6);
+}
+.plan-record-card .record-title { color: #b3540a; }
+.plan-record-card .record-arrow { background: rgba(217, 154, 20, .12); color: #b3540a; }
+.ri-plan { background: linear-gradient(135deg, #fdf0dd, #f8e3b8); }
+html.dark .plan-record-card {
+  border-color: rgba(217, 154, 20, .28);
+  background: linear-gradient(135deg, #241d0e, #1e1810);
+}
+html.dark .plan-record-card .record-title { color: #ecb73f; }
+html.dark .plan-record-card .record-arrow { color: #ecb73f; background: rgba(217, 154, 20, .16); }
+html.dark .ri-plan { background: linear-gradient(135deg, #2c2310, #251d0e); }
+
+/* ---- 排版：标题层级 + 字距 ---- */
+.app-title { font-weight: 800; letter-spacing: 2.5px; }
+.card-title { font-weight: 700; letter-spacing: .4px; }
+.goal-subject { font-weight: 800; }
+.stat-num, .goal-scroll-pct, .dr-stat-num, .subj-pct { letter-spacing: .3px; }
+.page-header { margin-bottom: 18px; }
+
+/* ---- 节奏：更从容的留白 ---- */
+.page { padding: 18px 18px 28px; }
+.card { padding: 18px; margin-bottom: 16px; }
+
+/* ---- 触感：主按钮桌面 hover 光泽扫过 ---- */
+@media (hover: hover) {
+  .btn-primary { position: relative; overflow: hidden; }
+  .btn-primary::after {
+    content: '';
+    position: absolute; top: 0; left: -85%;
+    width: 55%; height: 100%;
+    background: linear-gradient(105deg, transparent, rgba(255, 255, 255, .30), transparent);
+    transform: skewX(-18deg);
+    transition: left .55s ease;
+    pointer-events: none;
+  }
+  .btn-primary:hover::after { left: 135%; }
+}
+
+/* ---- 细节：底部弹窗把手 / 选区 / 滚动回弹 ---- */
+.modal { position: relative; }
+.modal::before {
+  content: '';
+  position: absolute; top: 9px; left: 50%; transform: translateX(-50%);
+  width: 38px; height: 5px; border-radius: 999px;
+  background: rgba(31, 59, 48, .13);
+  pointer-events: none;
+}
+html.dark .modal::before { background: rgba(255, 255, 255, .14); }
+body { overscroll-behavior-y: none; }
+::selection { background: rgba(47, 143, 107, .22); }
+
+/* ---- 桌面呈现：宽屏下 App 呈卡片式预览 ---- */
+@media (min-width: 540px) {
+  #app {
+    box-shadow: 0 20px 70px rgba(23, 43, 34, .14), 0 2px 10px rgba(23, 43, 34, .06);
+    border-left: 1px solid rgba(23, 43, 34, .06);
+    border-right: 1px solid rgba(23, 43, 34, .06);
+  }
+}
+
+/* ---- 动效克制：尊重系统「减弱动态效果」 ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================
+   看图卡库 · 学科内章节「可折叠 + 搜索」（2026-09）
+   方案A：进学科默认收起，关键词搜索快速定位，点击章节展开内联图网格
+   ============================================================ */
+.browse-search-wrap { margin-bottom: 12px; }
+.browse-search { background: var(--card); }
+.browse-search-count { display: block; margin-top: 8px; font-size: 12px; color: var(--text-3); font-weight: 600; }
+.ch-acc {
+  border-radius: 12px;
+  margin-bottom: 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(23, 43, 34, .04);
+  overflow: hidden;
+}
+.ch-row {
+  padding: 11px 12px;
+  border-bottom: 1px solid transparent;
+  transition: background .15s ease;
+}
+.ch-row:hover, .ch-row:active { background: var(--bg); }
+.ch-acc.open .ch-row { border-bottom-color: var(--border); }
+.ch-toggle {
+  flex-shrink: 0;
+  font-size: 11px; font-weight: 600;
+  color: var(--primary-dark);
+  background: var(--primary-light);
+  border-radius: 999px;
+  padding: 4px 11px;
+  transition: background .18s ease, color .18s ease;
+}
+.ch-acc.open .ch-toggle {
+  background: linear-gradient(135deg, #2f8f6b, #38a97d);
+  color: #fff;
+}
+.ch-grid-wrap { display: none; }
+.ch-acc.open .ch-grid-wrap { display: block; padding: 12px; background: var(--bg); }
+.ch-grid-inner .btn-primary { font-size: 14px; padding: 12px; border-radius: 999px; margin-bottom: 12px; }
+.browse-empty { text-align: center; color: var(--text-3); font-size: 13px; padding: 24px 0 8px; }
+html.dark .ch-acc { background: #18221d; border-color: #24352d; }
+html.dark .ch-row:hover, html.dark .ch-row:active { background: #101713; }
+html.dark .ch-acc.open .ch-row { border-bottom-color: #24352d; }
+html.dark .ch-grid-wrap { background: #101713; }
+html.dark .browse-search-count { color: #6e857a; }
+
+
+/* ---- 看图卡库章节行：学科色条（配合六科配色，data-subject 注入 --m-color） ---- */
+.ch-acc[data-subject] .ch-row { position: relative; padding-left: 20px; }
+.ch-acc[data-subject] .ch-row::before {
+  content: ""; position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  width: 4px; height: 24px; border-radius: 4px; background: var(--m-color); opacity: .95;
+}
+.ch-acc[data-subject] .ch-row:active::before { opacity: .6; }
+
+
+/* ---- 多选弹窗章节行：学科色条（与看图卡库同色系，五科混排时一眼区分） ---- */
+.img-ch-group[data-subject] .img-ch-row { position: relative; padding-left: 16px; }
+.img-ch-group[data-subject] .img-ch-row::before {
+  content: ""; position: absolute; left: 2px; top: 50%; transform: translateY(-50%);
+  width: 4px; height: 18px; border-radius: 4px; background: var(--m-color); opacity: .9;
+}
+.img-ch-group[data-subject] .img-ch-row:active::before { opacity: .55; }

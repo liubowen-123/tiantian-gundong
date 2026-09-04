@@ -422,25 +422,40 @@
     beginQueue(items, 'subject', 'practice', '看图卡学习完成！', isNewItem);
   }
 
-  /** 选择要学习的看图卡（按科目分组、章节勾选） */
+  /** 选择要学习的看图卡（按科目分组 + 学科筛选/折叠，章节勾选） */
   function openImageStudy() {
     const chs = TTScheduler.imageChapters();
     if (chs.length === 0) { toast('暂无看图挖空卡'); return; }
     const total = chs.reduce((s, c) => s + c.count, 0);
     const groups = {};
     chs.forEach(c => { (groups[c.subject] = groups[c.subject] || []).push(c); });
-    const rowsHtml = Object.keys(groups).map(sub => `
-      <div class="img-ch-subj">${esc(sub)}</div>
-      ${groups[sub].map(c => `
-        <label class="img-ch-row">
-          <input type="checkbox" class="img-ch-cb" value="${esc(JSON.stringify({ subject: c.subject, chapter: c.chapter }))}" checked>
-          <span class="img-ch-name">${esc(c.chapter)}</span>
-          <span class="img-ch-count">${c.count} 张</span>
-        </label>`).join('')}`).join('');
+    const subs = Object.keys(groups);
+    const tabsHtml = '<button class="img-ch-tab active" data-sub="">全部</button>' +
+      subs.map(s => `<button class="img-ch-tab" data-sub="${esc(s)}">${esc(s)}</button>`).join('');
+    const groupsHtml = subs.map(sub => `
+      <div class="img-ch-group" data-sub="${esc(sub)}" data-subject="${esc(sub)}">
+        <div class="img-ch-subj" role="button" tabindex="0" aria-expanded="true">
+          <span class="ics-name">${esc(sub)}</span>
+          <span class="ics-tools">
+            <button class="ics-btn" data-sel="1">全选</button>
+            <button class="ics-btn" data-sel="0">清空</button>
+          </span>
+          <span class="ics-caret">▾</span>
+        </div>
+        <div class="img-ch-group-body">
+          ${groups[sub].map(c => `
+            <label class="img-ch-row">
+              <input type="checkbox" class="img-ch-cb" value="${esc(JSON.stringify({ subject: c.subject, chapter: c.chapter }))}" checked>
+              <span class="img-ch-name">${esc(c.chapter)}</span>
+              <span class="img-ch-count">${c.count} 张</span>
+            </label>`).join('')}
+        </div>
+      </div>`).join('');
     openModal(`
       <div class="modal-title">选择要学习的看图卡</div>
-      <div class="wrong-summary">共 <b>${total}</b> 张 · 按科目/章节勾选（默认全选）</div>
-      <div class="img-ch-list">${rowsHtml}</div>
+      <div class="wrong-summary">共 <b>${total}</b> 张 · 先选学科，再勾章节（默认全选）</div>
+      <div class="img-ch-tabs" id="img-tabs">${tabsHtml}</div>
+      <div class="img-ch-list">${groupsHtml}</div>
       <div class="img-ch-tools">
         <button class="btn-cancel" id="img-all">全选</button>
         <button class="btn-cancel" id="img-none">清空</button>
@@ -453,6 +468,33 @@
     $('#img-cancel').addEventListener('click', closeModal);
     $('#img-all').addEventListener('click', () => $$('.img-ch-cb').forEach(cb => { cb.checked = true; }));
     $('#img-none').addEventListener('click', () => $$('.img-ch-cb').forEach(cb => { cb.checked = false; }));
+    // 学科筛选 chips：只看某学科的章节
+    $$('.img-ch-tab').forEach(tab => tab.addEventListener('click', () => {
+      const sub = tab.dataset.sub;
+      $$('.img-ch-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      $$('.img-ch-group').forEach(g => {
+        g.style.display = (!sub || g.dataset.sub === sub) ? '' : 'none';
+      });
+    }));
+    // 学科折叠 / 展开
+    $$('.img-ch-subj').forEach(h => h.addEventListener('click', e => {
+      if (e.target.closest('.ics-btn')) return;
+      const g = h.closest('.img-ch-group');
+      const body = g.querySelector('.img-ch-group-body');
+      const collapsed = g.classList.toggle('collapsed');
+      body.style.display = collapsed ? 'none' : '';
+      h.setAttribute('aria-expanded', String(!collapsed));
+      const c = h.querySelector('.ics-caret');
+      if (c) c.textContent = collapsed ? '▸' : '▾';
+    }));
+    // 学科组内 全选 / 清空（不冒泡到折叠）
+    $$('.ics-btn').forEach(btn => btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const g = btn.closest('.img-ch-group');
+      const sel = btn.dataset.sel === '1';
+      g.querySelectorAll('.img-ch-cb').forEach(cb => { cb.checked = sel; });
+    }));
     $('#img-start').addEventListener('click', () => {
       const chosen = $$('.img-ch-cb').filter(cb => cb.checked).map(cb => JSON.parse(cb.value));
       if (chosen.length === 0) { toast('请至少选择一个章节'); return; }
@@ -632,25 +674,34 @@
             </div>`).join('')}
         </div>`;
     } else if (!App.imgBrowseCh) {
-      // 二级：该科目的章节（带图预览）
+      // 二级：该科目的章节（可搜索 + 点击展开内联图网格）
       const subChs = chs.filter(c => c.subject === App.imgBrowseSub);
+      const totalCh = subChs.reduce((s, c) => s + c.count, 0);
       inner = `
         <div class="modal-title">${esc(App.imgBrowseSub)}</div>
         <div class="browse-back" id="browse-back">‹ 返回科目列表</div>
-        <div class="ch-list">
+        <div class="browse-tools browse-search-wrap">
+          <input class="form-input browse-search" id="browse-search" placeholder="🔍 搜索章节关键词" autocomplete="off" aria-label="搜索章节">
+          <span class="browse-search-count" id="browse-search-count">${subChs.length} 个章节 · ${totalCh} 张</span>
+        </div>
+        <div class="ch-list" id="browse-ch-list">
           ${subChs.map(c => {
             const first = TTScheduler.imageCards([{ subject: c.subject, chapter: c.chapter }])[0];
             return `
-            <div class="ch-row" data-ch="${esc(c.chapter)}">
-              <img class="ch-thumb" src="${esc(first ? first.image : '')}" loading="lazy" alt="">
-              <div class="ch-info">
-                <div class="ch-name">${esc(c.chapter)}</div>
-                <div class="ch-count">${c.count} 张</div>
+            <div class="ch-acc" data-ch="${esc(c.chapter)}" data-subject="${esc(App.imgBrowseSub)}">
+              <div class="ch-row" role="button" tabindex="0" data-ch="${esc(c.chapter)}" aria-expanded="false">
+                <img class="ch-thumb" src="${esc(first ? first.image : '')}" loading="lazy" alt="">
+                <div class="ch-info">
+                  <div class="ch-name">${esc(c.chapter)}</div>
+                  <div class="ch-count">${c.count} 张</div>
+                </div>
+                <span class="ch-toggle">展开</span>
               </div>
-              <button class="btn-ghost ch-grid" data-grid="${esc(c.chapter)}">🖼 网格</button>
+              <div class="ch-grid-wrap"></div>
             </div>`;
           }).join('')}
-        </div>`;
+        </div>
+        <div class="browse-empty" id="browse-empty" style="display:none">未找到匹配的章节，换个关键词试试</div>`;
     } else {
       // 三级：该章节的挖空图网格
       const cards = TTScheduler.imageCards([{ subject: App.imgBrowseSub, chapter: App.imgBrowseCh }]);
@@ -679,6 +730,23 @@
     });
     const multi = $('#browse-multi');
     if (multi) multi.addEventListener('click', openImageStudy);
+    // 章节关键词搜索（仅二级章节列表）
+    const search = $('#browse-search');
+    if (search) search.addEventListener('input', () => {
+      const q = (search.value || '').trim().toLowerCase();
+      const items = $$('#browse-ch-list .ch-acc');
+      let visible = 0;
+      items.forEach(el => {
+        const name = (el.dataset.ch || '').toLowerCase();
+        const hit = !q || name.indexOf(q) >= 0;
+        el.style.display = hit ? '' : 'none';
+        if (hit) visible++;
+      });
+      const countEl = $('#browse-search-count');
+      if (countEl) countEl.textContent = visible + ' 个章节';
+      const empty = $('#browse-empty');
+      if (empty) empty.style.display = visible === 0 ? '' : 'none';
+    });
     const all = $('#browse-all');
     if (all) all.addEventListener('click', () => {
       closeModal();
@@ -689,16 +757,39 @@
       App.imgBrowseCh = null;
       renderImageBrowse();
     }));
-    $$('.ch-row').forEach(el => el.addEventListener('click', () => {
-      // 点章节行 → 直接进入该章学习（先关弹窗）
-      closeModal();
-      startImageStudy([{ subject: App.imgBrowseSub, chapter: el.dataset.ch }]);
-    }));
-    $$('.ch-grid').forEach(btn => btn.addEventListener('click', e => {
-      e.stopPropagation();
-      App.imgBrowseCh = btn.dataset.grid;
-      renderImageBrowse();
-    }));
+    // 章节行：点击展开/收起 该章内联图网格（同一时刻只展开一个）
+    $$('.ch-row').forEach(el => {
+      el.addEventListener('click', () => {
+        const acc = el.closest('.ch-acc');
+        if (!acc) return;
+        const wrap = acc.querySelector('.ch-grid-wrap');
+        const toggle = el.querySelector('.ch-toggle');
+        const isOpen = acc.classList.contains('open');
+        $$('#browse-ch-list .ch-acc.open').forEach(o => {
+          if (o !== acc) {
+            o.classList.remove('open');
+            const w = o.querySelector('.ch-grid-wrap');
+            if (w) w.innerHTML = '';
+            const t = o.querySelector('.ch-toggle');
+            if (t) t.textContent = '展开';
+          }
+        });
+        if (isOpen) {
+          acc.classList.remove('open');
+          if (wrap) wrap.innerHTML = '';
+          if (toggle) toggle.textContent = '展开';
+          el.setAttribute('aria-expanded', 'false');
+          return;
+        }
+        acc.classList.add('open');
+        el.setAttribute('aria-expanded', 'true');
+        if (toggle) toggle.textContent = '收起';
+        renderChapterGrid(wrap, App.imgBrowseSub, el.dataset.ch);
+      });
+      el.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); }
+      });
+    });
     $$('.img-cell').forEach(el => el.addEventListener('click', () => {
       const card = TTStore.getById(el.dataset.id);
       if (card) {
@@ -708,6 +799,33 @@
     }));
   }
 
+  /** 在章节行内联渲染该章的挖空图网格 */
+  function renderChapterGrid(wrap, subject, chapter) {
+    const cards = TTScheduler.imageCards([{ subject: subject, chapter: chapter }]);
+    wrap.innerHTML = `
+      <div class="ch-grid-inner">
+        <button class="btn-primary" data-learn-all="${esc(chapter)}">学习本章全部（${cards.length}）</button>
+        <div class="img-grid">
+          ${cards.map(c => `
+            <div class="img-cell" data-id="${c.id}" title="点图学习这张卡">
+              <img class="img-cell-img" src="${esc(c.image)}" loading="lazy" alt="">
+            </div>`).join('')}
+        </div>
+        <div class="img-grid-tip">👆 点任意一张图，直接学习该卡</div>
+      </div>`;
+    const allBtn = wrap.querySelector('[data-learn-all]');
+    if (allBtn) allBtn.addEventListener('click', () => {
+      closeModal();
+      startImageStudy([{ subject: subject, chapter: chapter }]);
+    });
+    wrap.querySelectorAll('.img-cell').forEach(cell => cell.addEventListener('click', () => {
+      const card = TTStore.getById(cell.dataset.id);
+      if (card) {
+        closeModal();
+        beginQueue([card], 'subject', 'practice', '看图卡学习完成！', isNewItem);
+      }
+    }));
+  }
   function startWrong() {
     const items = TTScheduler.wrongBook();
     if (items.length === 0) { toast('暂无错题，继续加油！'); return; }
