@@ -17,6 +17,8 @@
     learnBackTo: 'today',
     learnTitle: '今日学习完成！',
     learnSessionStart: null, // 学习会话开始时间戳
+    learnHistoryId: null,   // 当前会话对应历史记录 ID
+    learnTotal: 0,          // 当前会话原始队列总数
     libFilter: 'all',
     libSearch: '',
     libView: 'flat',         // flat 平铺 | group 按科目·章节分组
@@ -145,6 +147,13 @@
     // 每日记录
     $('#rec-today').textContent = `今日 ${rec.todayCount} 题`;
     $('#rec-days').textContent = `已记录 ${rec.recordedDays} 天`;
+
+    // 学习记录入口
+    const learnHist = getLearnHistory();
+    const lhDoing = learnHist.filter(x => !x.done).length;
+    $('#rec-learn-info').textContent = lhDoing > 0
+      ? `${lhDoing} 个未完成 · 共 ${learnHist.length} 次记录`
+      : (learnHist.length > 0 ? `共 ${learnHist.length} 次记录` : '暂无学习记录');
 
     // 学习模式
     $$('#mode-seg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === App.learnMode));
@@ -311,9 +320,12 @@
     App.learnBackTo = backTo || 'today';
     App.learnTitle = title || '今日学习完成！';
     App.learnSessionStart = Date.now();
+    App.learnHistoryId = null;   // 新会话，历史记录新建
+    App.learnTotal = items.length; // 原始队列总数（用于历史进度显示）
     startLearnTimer();
     switchTab('learn');
     renderLearn();
+    saveLearnSession();
   }
 
   function startLearning(mode) {
@@ -797,8 +809,9 @@
           const r = TTScheduler.learnItem(it.id, correct ? 'ok' : 'wrong');
           afterQuiz(correct);
           App.learnResults.push({ id: it.id, ok: correct, isNew: entry.isNew });
+          saveLearnSession();
           actions.innerHTML = `<button class="btn-primary" id="btn-next">${App.learnIndex + 1 >= App.learnQueue.length ? '完成' : '下一题'}</button>`;
-          $('#btn-next').addEventListener('click', () => { App.learnIndex++; App.learnBusy = false; renderLearn(); });
+          $('#btn-next').addEventListener('click', () => { App.learnIndex++; App.learnBusy = false; saveLearnSession(); renderLearn(); });
         });
       };
       optList.addEventListener('click', e => {
@@ -840,10 +853,11 @@
       const r = TTScheduler.learnItem(it.id, ok);
       afterQuiz(correct);
       App.learnResults.push({ id: it.id, ok: correct, isNew: entry.isNew });
+      saveLearnSession();
 
       actions.innerHTML = `
         <button class="btn-primary" id="btn-next">${App.learnIndex + 1 >= App.learnQueue.length ? '完成' : '下一题'}</button>`;
-      $('#btn-next').addEventListener('click', () => { App.learnIndex++; App.learnBusy = false; renderLearn(); });
+      $('#btn-next').addEventListener('click', () => { App.learnIndex++; App.learnBusy = false; saveLearnSession(); renderLearn(); });
     });
   }
 
@@ -1052,6 +1066,7 @@
         TTScheduler.learnCard(it.id, b.dataset.r);
         afterCard();
         App.learnResults.push({ id: it.id, ok: b.dataset.r !== 'again', isNew: entry.isNew });
+        saveLearnSession();
         App.learnIndex++;
         App.learnBusy = false;
         renderLearn();
@@ -1060,6 +1075,7 @@
   }
 
   function renderLearnDone() {
+    markLearnSessionDone();
     App.learnSessionDone = true;
     // 记录学习时长
     if (App.learnSessionStart) {
@@ -1179,6 +1195,7 @@
     };
     App.learnQueue = [];
     App.learnSessionDone = false;
+    clearLearnSession();
     switchTab('learn');
     App.exam.timerId = setInterval(tickExam, 1000);
     renderExam();
@@ -2461,6 +2478,200 @@
     });
   }
 
+  /* ================= 学习会话持久化（刷新续学 + 学习记录） ================= */
+  const SESSION_KEY = 'ttgd.learnSession.v1';
+  const HISTORY_KEY = 'ttgd.learnHistory.v1';
+  const HISTORY_MAX = 30;
+
+  function getLearnHistory() {
+    try {
+      const raw = localStorage.getItem(HISTORY_KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+  }
+  function saveLearnHistory(list) {
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, HISTORY_MAX))); } catch (e) {}
+  }
+
+  function fmtHistoryTime(ts) {
+    const d = new Date(ts);
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const sameDay = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+    const hm = pad(d.getHours()) + ':' + pad(d.getMinutes());
+    if (sameDay) return '今天 ' + hm;
+    const yd = new Date(now); yd.setDate(now.getDate() - 1);
+    const isY = yd.getFullYear() === d.getFullYear() && yd.getMonth() === d.getMonth() && yd.getDate() === d.getDate();
+    if (isY) return '昨天 ' + hm;
+    return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + hm;
+  }
+
+  function currentSnapshot() {
+    const firstItem = App.learnQueue[0] && App.learnQueue[0].item;
+    return {
+      id: App.learnHistoryId || (App.learnHistoryId = 'ls_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
+      start: App.learnSessionStart || Date.now(),
+      lastActive: Date.now(),
+      source: App.learnSource,
+      subject: (firstItem && firstItem.subject) || '',
+      title: App.learnTitle,
+      mode: App.learnMode,
+      total: App.learnTotal || App.learnQueue.length,
+      q: App.learnQueue.map(x => ({ id: x.item.id, isNew: !!x.isNew })),
+      results: App.learnResults,
+      done: false
+    };
+  }
+
+  function saveLearnSession() {
+    try {
+      if (!App.learnQueue.length || App.learnSessionDone) return;
+      const snap = currentSnapshot();
+      localStorage.setItem(SESSION_KEY, JSON.stringify(snap));
+      const hist = getLearnHistory();
+      const idx = hist.findIndex(h => h.id === snap.id);
+      if (idx >= 0) { hist[idx] = snap; } else { hist.unshift(snap); }
+      saveLearnHistory(hist);
+    } catch (e) { /* 存储失败忽略 */ }
+  }
+  function clearLearnSession() {
+    try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+  }
+  /** 标记当前会话已完成（保留记录在历史中） */
+  function markLearnSessionDone() {
+    try {
+      if (App.learnHistoryId) {
+        const hist = getLearnHistory();
+        const idx = hist.findIndex(h => h.id === App.learnHistoryId);
+        if (idx >= 0) {
+          hist[idx].done = true;
+          hist[idx].results = App.learnResults;
+          hist[idx].lastActive = Date.now();
+          saveLearnHistory(hist);
+        }
+      }
+      clearLearnSession();
+    } catch (e) { clearLearnSession(); }
+  }
+  /** 从一条历史记录恢复学习 */
+  function resumeSession(sd) {
+    const content = TTStore.getContent();
+    const byId = {};
+    content.forEach(c => { byId[c.id] = c; });
+    const doneIds = new Set((sd.results || []).map(r => r.id));
+    const queue = [];
+    (sd.q || []).forEach(x => { const it = byId[x.id]; if (it) queue.push({ item: it, isNew: !!x.isNew }); });
+    const remaining = queue.filter(x => !doneIds.has(x.item.id));
+    if (remaining.length === 0) return false;
+    clearExamTimer();
+    App.exam = null;
+    App.learnQueue = remaining;
+    App.learnIndex = 0;
+    App.learnResults = sd.results || [];
+    App.learnSessionDone = false;
+    App.learnSource = sd.source || 'today';
+    App.learnBackTo = sd.backTo || 'today';
+    App.learnTitle = sd.title || '学习完成！';
+    App.learnSessionStart = sd.start || Date.now();
+    App.learnMode = sd.mode || 'all';
+    App.learnHistoryId = sd.id;
+    App.learnTotal = sd.total || remaining.length + doneIds.size;
+    saveLearnSession();
+    switchTab('learn');
+    renderLearn();
+    return true;
+  }
+  /** 页面加载时检测未完成的学习会话，询问是否继续 */
+  function tryRestoreLearnSession() {
+    let raw = null;
+    try { raw = localStorage.getItem(SESSION_KEY); } catch (e) {}
+    if (!raw) return;
+    let sd;
+    try { sd = JSON.parse(raw); } catch (e) { clearLearnSession(); return; }
+    if (!sd || !Array.isArray(sd.q) || sd.q.length === 0 || sd.done) { clearLearnSession(); return; }
+    const content = TTStore.getContent();
+    const byId = {};
+    content.forEach(c => { byId[c.id] = c; });
+    const doneIds = new Set((sd.results || []).map(r => r.id));
+    const remaining = (sd.q || []).map(x => byId[x.id]).filter(Boolean).filter(it => !doneIds.has(it.id));
+    if (remaining.length === 0) { clearLearnSession(); return; }
+    const modeName = sd.mode === 'quiz' ? '刷题' : sd.mode === 'card' ? '看图卡' : sd.mode === 'wrong' ? '错题' : '学习';
+    const srcName = sd.source === 'wrong' ? '错题重练' : (sd.source === 'subject' ? '科目练习' : '今日学习');
+    if (confirm('上次学习还有 ' + remaining.length + ' 项未完成（' + srcName + ' · ' + modeName + '），是否继续？\n\n「确定」继续上次学习 ｜ 「取消」稍后可从「学习记录」选择')) {
+      resumeSession(sd);
+    } else {
+      clearLearnSession();
+      renderToday();
+    }
+  }
+  /** 打开学习记录列表 */
+  function openLearnHistory() {
+    const hist = getLearnHistory();
+    if (hist.length === 0) { toast('暂无学习记录'); return; }
+    let html = '<div class="modal-title">学习记录</div>';
+    html += '<div class="learn-history-list">';
+    hist.forEach(h => { html += historyItemHtml(h); });
+    html += '</div>';
+    html += '<div class="modal-actions"><button class="btn-cancel" id="lh-close">关闭</button></div>';
+    openModal(html);
+    document.getElementById('lh-close').addEventListener('click', closeModal);
+    document.querySelectorAll('[data-resume]').forEach(b => {
+      b.addEventListener('click', () => {
+        const id = b.dataset.resume;
+        const sd = getLearnHistory().find(x => x.id === id);
+        if (!sd) { closeModal(); toast('该记录已失效'); return; }
+        closeModal();
+        if (resumeSession(sd)) toast('已恢复上次学习');
+        else toast('该记录无未完成内容');
+      });
+    });
+    document.querySelectorAll('[data-delhist]').forEach(b => {
+      b.addEventListener('click', () => {
+        const id = b.dataset.delhist;
+        if (!confirm('删除这条学习记录？')) return;
+        const hist = getLearnHistory().filter(x => x.id !== id);
+        saveLearnHistory(hist);
+        if (App.learnHistoryId === id) { App.learnHistoryId = null; clearLearnSession(); }
+        renderToday();
+        openLearnHistory();
+      });
+    });
+  }
+  function historyItemHtml(h) {
+    const total = h.total || (h.q || []).length;
+    const answered = (h.results || []).length;
+    const remaining = Math.max(0, total - answered);
+    const pct = total > 0 ? Math.round(answered / total * 100) : 0;
+    const modeName = h.mode === 'quiz' ? '刷题' : h.mode === 'card' ? '看图卡' : h.mode === 'wrong' ? '错题' : '学习';
+    const srcName = h.source === 'wrong' ? '错题重练' : (h.source === 'subject' ? '科目练习' : '今日学习');
+    const time = fmtHistoryTime(h.start);
+    const subject = h.subject ? '<span class="lhi-subj">' + esc(h.subject) + '</span>' : '';
+    const status = (!h.done && remaining > 0)
+      ? '<span class="lhi-badge doing">未完成 · 剩 ' + remaining + ' 项</span>'
+      : '<span class="lhi-badge done">已完成</span>';
+    return '' +
+      '<div class="lhi-item' + (h.done ? ' done' : '') + '">' +
+        '<div class="lhi-top">' +
+          '<span class="lhi-time">' + time + '</span>' +
+          subject +
+          '<span class="lhi-src">' + srcName + (h.source !== 'wrong' && modeName !== '学习' ? ' · ' + modeName : '') + '</span>' +
+          status +
+        '</div>' +
+        '<div class="lhi-title">' + esc(h.title || '学习记录') + '</div>' +
+        '<div class="lhi-progress">' +
+          '<div class="lhi-track"><div class="lhi-fill" style="width:' + pct + '%"></div></div>' +
+          '<span class="lhi-pct">' + answered + '/' + total + '</span>' +
+        '</div>' +
+        '<div class="lhi-actions">' +
+          ((!h.done && remaining > 0)
+            ? '<button class="btn-primary lhi-btn" data-resume="' + esc(h.id) + '">继续学习</button>'
+            : '<span class="lhi-finished">已完成</span>') +
+          '<button class="btn-ghost lhi-btn lhi-del" data-delhist="' + esc(h.id) + '">删除</button>' +
+        '</div>' +
+      '</div>';
+  }
+
   /* ================= 事件绑定 & 启动 ================= */
   function exitLearn() {
     stopLearnTimer();
@@ -2470,6 +2681,7 @@
         App.exam = null;
         App.learnQueue = [];
         App.learnSessionDone = false;
+        clearLearnSession();
         switchTab('practice');
       }
       return;
@@ -2477,6 +2689,7 @@
     if (confirm('退出本次学习？进度已保存。')) {
       App.learnQueue = [];
       App.learnSessionDone = false;
+      clearLearnSession();
       clearExamTimer();
       App.exam = null;
       switchTab(App.learnBackTo || 'today');
@@ -2526,6 +2739,8 @@
     $('#entry-record').addEventListener('click', () => openDailyRecord());
     const rcToday = document.getElementById('record-card-today');
     if (rcToday) rcToday.addEventListener('click', () => openDailyRecord());
+    const rcLearn = document.getElementById('record-card-learn');
+    if (rcLearn) rcLearn.addEventListener('click', openLearnHistory);
     $('#entry-exam').addEventListener('click', openExam);
     $('#entry-wrong').addEventListener('click', openWrongBook);
     on('#entry-img', 'click', openImageBrowse);
@@ -2698,6 +2913,7 @@
     } catch (e) {
       console.error('渲染今日页失败', e);
     }
+    tryRestoreLearnSession();
     startReminderCheck();
     setupExamIdleTimeout();
     setupKeyboardShortcuts();

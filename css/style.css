@@ -1443,3 +1443,45 @@ html.dark .icon-btn { background: rgba(24, 34, 29, .78); }
 html.dark .pe-icon { box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .25); }
 html.dark .record-card { background: linear-gradient(135deg, #18221d, #16201b); border-color: rgba(255, 255, 255, .05); }
 
+
+/* ================= v4 学习记录（刷新续学 + 历史选择） ================= */
+.learn-record-card {
+  border: 1.5px dashed var(--primary);
+  background: linear-gradient(135deg, #f0faf4, #ffffff);
+}
+html.dark .learn-record-card { background: linear-gradient(135deg, #14231b, #18221d); }
+
+/* ---- 历史列表 ---- */
+.learn-history-list { display: flex; flex-direction: column; gap: 12px; max-height: 56vh; overflow-y: auto; padding: 2px; }
+.lhi-item {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 13px;
+  background: var(--card);
+  transition: transform .1s;
+}
+.lhi-item.done { opacity: .62; }
+.lhi-item:active { transform: scale(.99); }
+.lhi-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lhi-time { font-size: 11px; color: var(--text-3); font-weight: 600; }
+.lhi-subj {
+  font-size: 11px; font-weight: 700; color: var(--primary-dark);
+  background: var(--primary-light); border-radius: 6px; padding: 2px 7px;
+}
+.lhi-src { font-size: 11px; color: var(--text-2); }
+.lhi-badge { font-size: 11px; padding: 3px 9px; border-radius: 999px; font-weight: 700; margin-left: auto; }
+.lhi-badge.doing { background: #fef3c7; color: #b45309; }
+.lhi-badge.done { background: #f3f4f6; color: var(--text-3); }
+.lhi-title { font-size: 14px; font-weight: 600; margin-top: 7px; }
+.lhi-progress { display: flex; align-items: center; gap: 10px; margin-top: 9px; }
+.lhi-track { flex: 1; height: 7px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.lhi-fill { height: 100%; background: linear-gradient(90deg, var(--primary), #4fb286); border-radius: 4px; }
+.lhi-item.done .lhi-fill { background: #d1d5db; }
+.lhi-pct { font-size: 11px; color: var(--text-2); font-weight: 600; flex-shrink: 0; }
+.lhi-actions { display: flex; gap: 8px; margin-top: 11px; }
+.lhi-btn { flex: 1; padding: 9px; font-size: 13px; border-radius: 10px; }
+.lhi-del { color: var(--danger); border-color: rgba(229, 72, 77, .3); }
+.lhi-finished { flex: 1; text-align: center; font-size: 13px; color: var(--text-3); padding: 9px 0; }
+html.dark .lhi-subj { color: #7f96f0; background: rgba(79, 111, 216, .18); }
+html.dark .lhi-badge.doing { background: rgba(245, 158, 11, .16); color: #ecb73f; }
+html.dark .lhi-badge.done { background: rgba(255, 255, 255, .07); color: #8a93a5; }
