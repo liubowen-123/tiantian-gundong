@@ -2446,8 +2446,23 @@
   function openSettings() {
     const s = TTStore.getSettings();
     const a = Object.assign({}, TTAnki.DEFAULT_ANKI, s.anki || {});
+    const _syncOn = window.TTSync && window.TTSync.configured && window.TTSync.configured();
+    const _syncUser = _syncOn && window.TTSync.getUser ? window.TTSync.getUser() : null;
+    const syncHtml = _syncOn ? `
+      <div class="sync-card" id="sync-card">
+        <div class="sync-row">
+          <div class="sync-mail" id="sync-mail">${_syncUser ? esc(_syncUser.email || '') : '未登录'}</div>
+          <span class="tag sub">${_syncUser ? '已登录 · 云同步' : '云同步'}</span>
+        </div>
+        <div class="sync-status" id="sync-status">${_syncUser ? '学习数据自动同步到云端，换设备登录同一账号即可继续' : '登录后数据云端同步，多设备不丢失'}</div>
+        <div class="sync-actions">
+          <button class="btn-ghost" id="sync-now">立即同步</button>
+          <button class="btn-cancel" id="sync-logout">${_syncUser ? '退出登录' : '去登录'}</button>
+        </div>
+      </div>` : '';
     openModal(`
       <div class="modal-title">设置</div>
+      ${syncHtml}
       <div class="form-group">
         <label class="form-label">外观</label>
         <div class="radio-row" id="set-theme-row">
@@ -2519,6 +2534,26 @@
         <button class="btn-ghost" id="set-reset" style="color:var(--danger);border-color:#fecaca">重置所有数据</button>
       </div>
     `);
+    const syncLogout = $('#sync-logout');
+    if (syncLogout) syncLogout.addEventListener('click', async () => {
+      if (window.TTSync && window.TTSync.isAuthed && window.TTSync.isAuthed()) {
+        if (confirm('确定退出登录吗？本机数据会保留，下次登录同一账号可继续同步。')) {
+          try { await window.TTSync.logout(); } catch (e) {}
+          closeModal();
+          toast('已退出登录');
+        }
+      } else {
+        // 未登录：去登录
+        closeModal();
+        if (window.TTSync && window.TTSync.showLoginUI) window.TTSync.showLoginUI();
+      }
+    });
+    const syncNow = $('#sync-now');
+    if (syncNow) syncNow.addEventListener('click', () => {
+      if (window.TTSync) window.TTSync.syncNow();
+      toast('已请求立即同步');
+      closeModal();
+    });
     $('#set-cancel').addEventListener('click', closeModal);
     $$('#set-theme-row .radio-pill').forEach(p => {
       p.addEventListener('click', () => {

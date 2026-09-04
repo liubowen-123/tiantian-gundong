@@ -1945,3 +1945,43 @@ html.dark .browse-search-count { color: #6e857a; }
   .app-title { font-size: 34px; }
   .img-grid { grid-template-columns: repeat(5, 1fr); }
 }
+
+
+/* ============================================================
+   账号登录 · 云端同步界面
+   ============================================================ */
+.tt-login-mask {
+  position: fixed; inset: 0; z-index: 200;
+  background: linear-gradient(160deg, #14533d 0%, #1f7a58 55%, #2f8f6b 100%);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.tt-login-card {
+  width: 100%; max-width: 400px;
+  background: #fff; border-radius: 24px;
+  padding: 32px 26px 26px;
+  box-shadow: 0 24px 70px rgba(10, 40, 28, .35);
+  animation: slideUp .3s ease;
+}
+.tt-login-logo { font-size: 34px; font-weight: 800; text-align: center; letter-spacing: 1px; color: #1f7a58; }
+.tt-login-title { font-size: 17px; font-weight: 700; text-align: center; margin-top: 10px; color: var(--text); }
+.tt-login-sub { font-size: 13px; color: var(--text-2); text-align: center; margin: 8px 0 18px; line-height: 1.6; }
+.tt-login-field { margin-bottom: 12px; }
+.tt-login-field .form-input { font-size: 15px; padding: 13px 14px; }
+.tt-login-err { min-height: 18px; font-size: 12.5px; color: var(--danger); margin-bottom: 8px; text-align: center; }
+.tt-login-mask .btn-primary { margin-bottom: 10px; }
+.tt-login-mask .btn-ghost { width: 100%; margin-bottom: 12px; }
+.tt-login-tip { font-size: 11.5px; color: var(--text-3); text-align: center; line-height: 1.6; }
+html.dark .tt-login-card { background: #18221d; }
+html.dark .tt-login-logo { color: #7fd7ab; }
+html.dark .tt-login-title { color: #eef4f0; }
+html.dark .tt-login-sub { color: #a8bcb1; }
+html.dark .tt-login-tip { color: #6e857a; }
+
+/* 设置页 · 云同步卡片 */
+.sync-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 14px; background: var(--card); }
+.sync-card .sync-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sync-card .sync-mail { font-weight: 700; font-size: 14px; color: var(--primary-dark); word-break: break-all; }
+.sync-card .sync-status { font-size: 12px; color: var(--text-2); margin-top: 4px; }
+.sync-card .sync-actions { display: flex; gap: 8px; margin-top: 12px; }
+.sync-card .sync-actions .btn-cancel, .sync-card .sync-actions .btn-ghost { width: auto; flex: 1; margin: 0; padding: 9px 12px; font-size: 13px; }
