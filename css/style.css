@@ -1657,3 +1657,16 @@ html.dark .plan-welcome .pw-emoji { background: linear-gradient(135deg, #12301f,
 .lhi-item.done { border-left-color: #d1d5db; }
 .lhi-top { align-items: center; }
 .lhi-time { letter-spacing: .2px; }
+
+/* ---- 学习计划：任务「开始学习」直达按钮 ---- */
+.pt-learn {
+  display: inline-flex; align-items: center; gap: 5px;
+  margin-top: 10px; padding: 7px 13px; border-radius: 999px;
+  border: 1px solid rgba(47, 143, 107, .25); background: var(--primary-light);
+  color: var(--primary-dark); font-size: 12px; font-weight: 700; cursor: pointer;
+  transition: transform .12s, box-shadow .12s;
+}
+.pt-learn:hover { box-shadow: 0 2px 8px rgba(47, 158, 120, .2); }
+.pt-learn:active { transform: scale(.95); }
+.plan-task.done .pt-learn { opacity: .45; }
+html.dark .pt-learn { border-color: rgba(79, 178, 134, .3); color: #7fd6ae; background: rgba(47, 158, 120, .14); }

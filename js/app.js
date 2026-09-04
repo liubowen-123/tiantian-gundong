@@ -2709,6 +2709,7 @@
     const d5 = planDayRow(day - 4);
     if (d5) tasks.push({ key: 'd5', round: '第3轮', title: d5.content, sub: '背讲义内容，重点关注红色等重点字词' });
     if (row.bio) tasks.push({ key: 'bio', round: '生化任务', bio: true, title: row.bio, sub: '完成每日生化任务' });
+    tasks.forEach(t => { t.match = planMatchTask(t.title, t.bio ? '生物化学' : null); });
     return tasks;
   }
   function planDayDone(plan, day, key) {
@@ -2725,9 +2726,70 @@
     base.setDate(base.getDate() + (day - 1));
     return (base.getMonth() + 1) + '/' + base.getDate();
   }
+  /* ---- 计划任务 → 内容库章节匹配（直达学习） ---- */
+  const PLAN_ALL_SUBS = ['生理学', '病理学', '内科学', '外科学', '生物化学'];
+  const PLAN_SUB_MAP = { '生理': '生理学', '病理': '病理学', '内科': '内科学', '外科': '外科学', '生化': '生物化学' };
+  const PLAN_SYN = {
+    '乳腺癌': '乳房疾病', '间质性肺疾病': '肺间质性疾病', '肺硅沉着病': '硅肺沉着病',
+    'graves病': '甲亢', '甲状腺功能减退症': '甲减', '原发性醛固酮增多症': '原醛',
+    '系统性红斑狼疮': 'sle', '类风湿性关节炎': '类风湿关节炎', '其他外科总论': '其他外科学总论',
+    '细胞信号转导': '细胞信号传导', '原癌基因': '小基因', '抑癌基因': '小基因',
+    '基因重组': '小基因', '分子生物学技术': '小基因', '糖代谢': '糖有氧氧化',
+    '脂肪动员': '脂肪代谢', '甘油的利用': '脂肪代谢', '脂肪的合成': '脂肪代谢'
+  };
+  function planNorm(s) { return String(s || '').toLowerCase().replace(/[\s的、]/g, ''); }
+  function planChaptersOf(sub) {
+    return (TTStore.getContent() || [])
+      .filter(x => x.subject === sub && Array.isArray(x.masks) && x.masks.length)
+      .reduce((acc, x) => { acc.add(x.chapter || '未分章'); return acc; }, new Set());
+  }
+  /** 解析任务文本 → [{subject, chapter}]，用于点击任务直达学习 */
+  function planMatchTask(text, subjectHint) {
+    const chapterCache = {};
+    const chs = sub => (chapterCache[sub] = chapterCache[sub] || planChaptersOf(sub));
+    const matchLine = (subHints, content) => {
+      const keys = content.split(/[；;＆&、+\-]/).map(planNorm).filter(k => k.length >= 2);
+      keys.slice().forEach(k => { const v = PLAN_SYN[k]; if (v) keys.push(planNorm(v)); });
+      const perSub = {};
+      subHints.forEach(sub => {
+        const matched = new Set();
+        [...chs(sub)].forEach(ch => {
+          const chn = planNorm(ch);
+          keys.forEach(k => { if (chn.includes(k) || (k.includes(chn) && chn.length >= 2)) matched.add(ch); });
+        });
+        if (matched.size === 0 && subHints.length === 1) { [...chs(sub)].forEach(ch => matched.add(ch)); }
+        perSub[sub] = matched;
+      });
+      if (subHints.length > 1) {
+        let best = null, bestN = -1;
+        subHints.forEach(sub => { if (perSub[sub].size > bestN) { bestN = perSub[sub].size; best = sub; } });
+        if (best && bestN > 0) return [...perSub[best]].map(ch => ({ subject: best, chapter: ch }));
+        return [];
+      }
+      const sub = subHints[0];
+      return [...perSub[sub]].map(ch => ({ subject: sub, chapter: ch }));
+    };
+    const out = [];
+    String(text || '').split('\n').forEach(line => {
+      line = line.trim(); if (!line) return;
+      let subHints = subjectHint ? [subjectHint] : PLAN_ALL_SUBS.slice();
+      let content = line;
+      const m = line.match(/^(生理|病理|内科|外科|生化)[：:](.*)$/);
+      if (m) { subHints = [PLAN_SUB_MAP[m[1]]]; content = m[2]; }
+      matchLine(subHints, content).forEach(x => out.push(x));
+    });
+    const seen = new Set(), res = [];
+    out.forEach(x => { const k = x.subject + '|' + x.chapter; if (!seen.has(k)) { seen.add(k); res.push(x); } });
+    return res;
+  }
+
   const PLAN_ROUND_CLS = { new: 'r1', d2: 'r2', d5: 'r3', bio: 'r4' };
   function planTaskHtml(task, done) {
     const roundCls = 'pt-round ' + (PLAN_ROUND_CLS[task.key] || 'r1');
+    const matched = task.match;
+    const learnBtn = matched && matched.length
+      ? '<button class="pt-learn" data-learn="1">📖 开始学习 · ' + matched.length + ' 个章节 ›</button>'
+      : '';
     return '' +
       '<div class="plan-task' + (done ? ' done' : '') + '" data-key="' + task.key + '">' +
         '<div class="pt-top">' +
@@ -2736,6 +2798,7 @@
         '</div>' +
         '<div class="pt-title">' + esc(task.title) + '</div>' +
         '<div class="pt-sub">' + esc(task.sub) + '</div>' +
+        learnBtn +
       '</div>';
   }
   function planGridHtml(plan) {
@@ -2880,6 +2943,19 @@
       savePlan(plan);
       renderToday();
       openPlan();
+    });
+    // 任务「开始学习」直达对应章节
+    document.querySelectorAll('#modal-mask .pt-learn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const el = btn.closest('.plan-task');
+        const key = el.dataset.key;
+        const day = plan.currentDay;
+        const task = planDayTasks(day).find(t => t.key === key);
+        if (!task || !task.match || !task.match.length) { toast('暂无对应内容'); return; }
+        closeModal();
+        startImageStudy(task.match);
+      });
     });
     // 任务点击：标记完成（划删除线变暗淡）
     document.querySelectorAll('#modal-mask .plan-task').forEach(el => {
