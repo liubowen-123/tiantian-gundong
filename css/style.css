@@ -369,6 +369,41 @@ html, body {
 .feedback.bad { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
 .feedback .fb-title { font-weight: 700; margin-bottom: 4px; }
 
+/* AI 解析 */
+.ai-explain-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  margin-top: 10px; padding: 6px 13px;
+  border: 1px solid #cde8dd; border-radius: 999px;
+  background: #f2faf6; color: #1f7a58;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: background .15s, border-color .15s, transform .1s;
+}
+.ai-explain-btn:hover { background: #e3f3ea; border-color: #9fd6bc; }
+.ai-explain-btn:active { transform: scale(.96); }
+.ai-explain-btn:disabled { opacity: .55; cursor: not-allowed; }
+.ai-explain-box {
+  margin-top: 10px; padding: 12px 14px;
+  border-radius: 12px;
+  background: #f7faf8; border: 1px solid #e3efe9;
+  color: #243b31; font-size: 13px; line-height: 1.75;
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 320px; overflow-y: auto;
+}
+.ai-explain-box .cur { display: inline-block; width: 6px; height: 13px; background: #2f8f6b; vertical-align: -2px; animation: aiBlink 1s steps(2) infinite; }
+
+/* 对应导图片段 */
+.img-snippet { margin-top: 12px; }
+.img-snippet-label { font-size: 12px; font-weight: 600; color: #1f7a58; margin-bottom: 6px; }
+.img-snippet-viewport {
+  position: relative; overflow: hidden;
+  border-radius: 10px; border: 1px solid #d9e8e0;
+  background: #ffffff; cursor: zoom-in;
+  box-shadow: 0 1px 4px rgba(31, 90, 68, .08);
+}
+.img-snippet-viewport img { position: absolute; max-width: none; user-select: none; -webkit-user-drag: none; }
+.img-snippet-foot { font-size: 11px; color: #8a9a92; margin-top: 5px; }
+@keyframes aiBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
 .learn-actions { display: flex; gap: 10px; margin-top: 16px; }
 .learn-actions .btn-primary { margin-bottom: 0; flex: 1; }
 .btn-again {
@@ -993,6 +1028,12 @@ html.dark .option.correct { background: #123527; border-color: #2f8f6b; }
 html.dark .option.wrong { background: #3a1a1d; border-color: #e5484d; }
 html.dark .feedback.ok { background: #123527; color: #7fd7ab; border-color: #2f8f6b; }
 html.dark .feedback.bad { background: #3a1a1d; color: #f3a7a8; border-color: #e5484d; }
+html.dark .ai-explain-btn { background: #123527; color: #7fd7ab; border-color: #2f8f6b; }
+html.dark .ai-explain-btn:hover { background: #184a33; }
+html.dark .ai-explain-box { background: #0f1f18; color: #c9e6d6; border-color: #1f3a2e; }
+html.dark .img-snippet-label { color: #7fd7ab; }
+html.dark .img-snippet-viewport { background: #0f1f18; border-color: #2f8f6b; }
+html.dark .img-snippet-foot { color: #6f8a7c; }
 html.dark .flashcard-front { background: linear-gradient(160deg, #18221d, #141e19); border-color: #24352d; }
 html.dark .flashcard-back { background: linear-gradient(160deg, #1d3a2e, #162b22); }
 html.dark .tabbar { background: rgba(16, 23, 19, .92); }
