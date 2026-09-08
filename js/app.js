@@ -712,9 +712,7 @@
 
   /** 清除已导入的真题（带 year 字段的选择题），用于升级后重新导入 */
   function clearQBank() {
-    const list = TTStore.getContent();
-    const ids = list.filter(x => x.type === 'quiz' && x.year).map(x => x.id);
-    const n = TTStore.removeMany(ids);
+    const n = TTStore.removeBundledBy(x => x.type === 'quiz' && x.year);
     localStorage.removeItem('ttgd.qbank.v1');
     toast('已清除真题 ' + n + ' 题，可重新导入');
     renderPractice();
@@ -770,7 +768,7 @@
       let items = [];
       chosen.forEach(s => items = items.concat(bank[s]));
       try {
-        TTStore.bulkAdd(items);
+        TTStore.registerBundled(items);
         const imported = qbankImported();
         chosen.forEach(s => { if (imported.indexOf(s) < 0) imported.push(s); });
         localStorage.setItem('ttgd.qbank.v1', JSON.stringify(imported));
@@ -3585,7 +3583,9 @@
 
   function init() {
     try {
-      importBundled();
+      importBundled();                // 注册内置图片卡到内存
+      registerBundledQuestions();     // 恢复已导入科目真题到内存
+      TTStore.migrateLegacyStorage(); // 旧整包题面抽进度后删除，释放本地存储
       removeSamples();
       TTAnki.migrate();
     } catch (e) {
@@ -3608,6 +3608,12 @@
     setupExamIdleTimeout();
     setupKeyboardShortcuts();
     setupSWUpdateListener();
+    try {
+      if (sessionStorage.getItem('ttgd.restore.toast')) {
+        sessionStorage.removeItem('ttgd.restore.toast');
+        setTimeout(function () { toast('已从云端恢复学习记录'); }, 500);
+      }
+    } catch (e) {}
   }
 
   /* ================= 考试空闲超时（离开标签页自动暂停） ================= */
@@ -3759,21 +3765,32 @@
 
   function importBundled() {
     try {
-      if (!window.TTBundledImageCards || !window.TTBundledImageCards.length) return;
-      // 清理旧版本地地址（127.0.0.1 / localhost）的图片卡，保留用户导入的卡片
-      const stale = TTStore.getContent().filter(x =>
-        x.masks && x.masks.length && x.image && 
-        (x.image.indexOf('127.0.0.1') >= 0 || x.image.indexOf('localhost') >= 0)
-      );
-      if (stale.length) TTStore.removeMany(stale.map(x => x.id));
-      const existing = new Set(TTStore.getContent().map(c => c.image).filter(Boolean));
-      const fresh = window.TTBundledImageCards.filter(c => !existing.has(c.image));
-      if (fresh.length) {
-        TTStore.bulkAdd(fresh);
-        toast('已导入图片挖空卡 ' + fresh.length + ' 张');
-      }
+      if (!window.TTBundledImageCards || !window.TTBundledImageCards.length) return 0;
+      // v4: 内置图片卡只注册进内存 base，不写入 localStorage（题面每台设备可由内置文件重建）
+      var n = TTStore.registerBundled(window.TTBundledImageCards);
+      TTStore.reabsorbUsers();
+      return n;
     } catch (e) {
-      console.warn('图片挖空卡导入失败', e);
+      console.warn('图片挖空卡注册失败', e);
+      return 0;
+    }
+  }
+
+  /** 注册已导入科目的真题到内存 base（依 ttgd.qbank.v1，刷新后自动恢复，不落盘） */
+  function registerBundledQuestions() {
+    try {
+      const bank = window.TTBundledQuestionBank;
+      if (!bank) return 0;
+      const imported = qbankImported();
+      if (!imported.length) return 0;
+      let items = [];
+      imported.forEach(function(sub){ if (bank[sub]) items = items.concat(bank[sub]); });
+      var n2 = TTStore.registerBundled(items);
+      TTStore.reabsorbUsers();
+      return n2;
+    } catch (e) {
+      console.warn('真题注册失败', e);
+      return 0;
     }
   }
 
@@ -3797,7 +3814,7 @@
     if (_qbankLoading) return _qbankLoading;
     _qbankLoading = loadScript('js/bundled_questions.js').then(function() {
       _qbankLoading = null;
-      try { renderPractice(); } catch(e) {}
+      try { registerBundledQuestions(); renderPractice(); } catch(e) {}
     }).catch(function(err) {
       console.warn('题库加载失败，2秒后重试', err);
       _qbankLoading = null;
@@ -3815,6 +3832,7 @@
     }
     loadScript('js/bundled_imagecards.js').then(function() {
       importBundled();
+      try { renderToday(); renderPractice(); } catch (e) {}
     }).catch(function(e) {
       console.warn('图片挖空卡延迟加载失败', e);
     });

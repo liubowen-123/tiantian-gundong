@@ -38,6 +38,25 @@
       return hash(JSON.stringify(raw));
     } catch (e) { return ''; }
   }
+  // v4：题面常驻内存，判断“本机是否有个人数据”要看学习进度/自建/学习记录，而不是题数
+  function localHasProgress() {
+    try {
+      var prog = TTStore.getContent().some(function (x) {
+        return (x.stage !== undefined && x.stage >= 0) || x.fav || x.note ||
+          x.wrongCount > 0 || x.reviewCount > 0 || (x.anki && x.anki.state && x.anki.state !== 'new') ||
+          x._bundled !== true;
+      });
+      if (prog) return true;
+      var h = JSON.parse(localStorage.getItem('ttgd.learnHistory.v1') || '[]');
+      return !!(h && h.length);
+    } catch (e) { return true; }
+  }
+  // 云端数据写入本地后，整页刷新，让所有模块用恢复后的数据重新初始化（避免界面仍旧）
+  function reloadAfterRestore() {
+    try { sessionStorage.setItem('ttgd.restore.toast', '1'); } catch (e) {}
+    setTimeout(function () { try { location.reload(); } catch (e) {} }, 400);
+  }
+
   function emit() {
     for (var i = 0; i < listeners.length; i++) {
       try { listeners[i]({ authed: authed, user: user }); } catch (e) {}
@@ -124,7 +143,7 @@
             TTStore.importAll(row.payload);
             m.lastPushAt = row.updated_at; m.lastPullAt = new Date().toISOString(); saveMeta(m);
             lastExportHash = currentExportHash();
-            notify('已从云端恢复数据');
+            reloadAfterRestore();
           } catch (e) { console.error('cloud restore failed', e); }
         } else {
           schedulePush();
@@ -140,7 +159,7 @@
     fetchCloud().then(function (res) {
       if (res.error) return;
       var hasCloud = !!(res.data && res.data.payload);
-      var localEmpty = !(TTStore.getContent().length > 0);
+      var localEmpty = !localHasProgress();
       if (!hasCloud) { uploadLocal(); return; }   // 云端空 → 直接上传本地
       if (localEmpty) { restoreFromCloud(); return; } // 本地空 → 直接恢复云端
       // 两边都有数据 → 让用户选
@@ -151,12 +170,15 @@
   function restoreFromCloud() {
     fetchCloud().then(function (res) {
       if (!res.error && res.data && res.data.payload) {
-        try { TTStore.importAll(res.data.payload); } catch (e) {}
+        try {
+          TTStore.importAll(res.data.payload);
+          var m0 = meta() || {};
+          m0.lastPushAt = res.data.updated_at || new Date().toISOString();
+          saveMeta(m0);
+          lastExportHash = currentExportHash();
+          reloadAfterRestore();
+        } catch (e) { console.error('cloud restore failed', e); }
       }
-      var m = meta() || {}; m.lastPushAt = new Date().toISOString(); saveMeta(m);
-      lastExportHash = currentExportHash();
-      schedulePush();
-      notify('已从云端恢复数据');
     }).catch(function () {});
   }
   function uploadLocal() {

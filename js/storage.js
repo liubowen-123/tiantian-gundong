@@ -1,9 +1,20 @@
-/* ===== 天天滚动 · 数据持久层 (localStorage) ===== */
+/* ===== 天天滚动 · 数据持久层 (localStorage) =====
+ * 架构（v4）：静态题面与个人进度分离，避免内置题库(~8MB)撑爆 localStorage
+ *  - base    : 内置题面，运行时由 bundled 注册进【内存】，不落盘（每台设备可从 js 文件重建）
+ *  - overlay : 个人学习进度 { 稳定id: {stage,nextReview,anki,fav,note...} }，落盘，体积极小
+ *  - users   : 用户自建 / CSV·Anki 导入的完整条目，落盘
+ * 对外 getContent() 仍返回“题面+进度”的完整合并视图，业务层无感。
+ * ============================================================== */
 (function () {
   'use strict';
 
   const KEYS = {
-    content: 'ttgd.content.v1',
+    // v4：题面不再落盘
+    progress: 'ttgd.progress.v4',   // 内置条目学习进度（overlay）
+    users: 'ttgd.useritems.v4',     // 用户自建/导入条目（完整）
+    hidden: 'ttgd.hidden.v4',       // 被用户移除的内置条目 id
+    storeVer: 'ttgd.store.v',       // 存储架构版本标记
+    legacyContent: 'ttgd.content.v1', // 旧版整包内容（迁移后删除以释放空间）
     settings: 'ttgd.settings.v1',
     log: 'ttgd.log.v1',
     lastDate: 'ttgd.lastDate.v1',
@@ -19,7 +30,7 @@
     themeMode: 'auto',     // auto | light | dark
     examMinutes: 180,      // 整卷考试时长（分钟）
     examCount: 20,         // 整卷考试的题目数量（从题库随机抽取）
-    notifyReminder: true, // 每日学习提醒
+    notifyReminder: true,  // 每日学习提醒
   };
 
   function uid() {
@@ -60,6 +71,7 @@
   function write(key, val) {
     try {
       localStorage.setItem(key, JSON.stringify(val));
+      return true;
     } catch (e) {
       console.warn('write failed', key, e);
       // 存储空间不足时提示用户
@@ -68,7 +80,6 @@
         if (typeof toast === 'function') {
           toast(msg);
         } else {
-          // fallback：在页面顶部显示
           var banner = document.createElement('div');
           banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#e5484d;color:#fff;text-align:center;padding:10px 16px;font-size:14px;font-weight:600';
           banner.textContent = msg;
@@ -76,10 +87,95 @@
           setTimeout(function () { banner.remove(); }, 5000);
         }
       }
+      return false;
     }
   }
 
-  let contentCache = null; // 内容内存缓存（性能优化）
+  /* ================= 三层存储：base(内存) / overlay / users ================= */
+
+  // 题面字段（来自内置 base，不进 overlay）
+  const FACE_KEYS = { type:1, subject:1, chapter:1, question:1, options:1, answer:1, explain:1, image:1, masks:1, year:1, id:1, _bundled:1, createdAt:1 };
+  // 视为“无进度”的默认值字段（不写入 overlay，保持 overlay 极小）
+  function isEmptyProg(k, v) {
+    if (v === null || v === undefined || v === '' || v === false) return true;
+    if (k === 'stage' && v === -1) return true;
+    if ((k === 'reviewCount' || k === 'wrongCount') && v === 0) return true;
+    if (k === 'anki') {
+      if (!v || v.state === 'new') return true;
+    }
+    return false;
+  }
+
+  const baseById = new Map();   // 稳定id -> 题面条目（含默认进度）
+  const baseOrder = [];         // 注册顺序（稳定 id）
+  let baseSeq = 0;
+  const BASE_TIME = 1700000000000;
+
+  let overlay = undefined;      // { bid: {进度} }
+  let users = undefined;        // [完整用户条目]
+  let hiddenSet = undefined;    // Set(bid)
+  let mergedCache = null;
+
+  function ov() { if (overlay === undefined) overlay = read(KEYS.progress, {}) || {}; return overlay; }
+  function us() { if (users === undefined) users = read(KEYS.users, []) || []; return users; }
+  function hidden() { if (hiddenSet === undefined) hiddenSet = new Set(read(KEYS.hidden, []) || []); return hiddenSet; }
+  function saveOv() { write(KEYS.progress, ov()); mergedCache = null; }
+  function saveUs() { write(KEYS.users, us()); mergedCache = null; }
+  function saveHidden() { write(KEYS.hidden, Array.from(hidden())); mergedCache = null; }
+  function invalidate() { mergedCache = null; }
+
+  // 稳定内容主键：图片卡按图片 URL，选择题按 科目|章节|年份|题干
+  function ckeyOf(it) {
+    if (it && it.image) return 'c|' + it.image;
+    // 选择题主键纳入答案与选项：同题干但答案不同（如配不同图的心电图判读题）视为不同题；
+    // 不纳入 explain（解析会润色，纳入会导致进度丢失）。此算法上线后不可再改，否则云端进度 id 失效。
+    var ans = Array.isArray(it.answer) ? it.answer.join(',') : it.answer;
+    var opts = Array.isArray(it.options) ? it.options.join('') : (it.options || '');
+    return 'q|' + (it.subject || '') + '|' + (it.chapter || '') + '|' + (it.year != null ? it.year : '') + '|' + (it.question || '') + '|' + (ans == null ? '' : ans) + '|' + opts;
+  }
+  function djb2(str, seed) {
+    let h = seed >>> 0;
+    for (let i = 0; i < str.length; i++) { h = (((h << 5) + h + str.charCodeAt(i)) | 0) >>> 0; }
+    return h.toString(36);
+  }
+  // 双哈希拼接，把碰撞概率降到可忽略
+  function sidOf(ckey) { return 'b' + djb2(ckey, 5381) + djb2(ckey, 2166136261 >>> 0); }
+
+  function defaultProgress() {
+    return {
+      stage: -1, nextReview: null, reviewCount: 0, wrongCount: 0, graduated: false,
+      fav: false, note: '', noteUpdated: null
+    };
+  }
+
+  /** 从一个完整条目里抽取“有意义的个人进度”（剔除题面与默认值） */
+  function pickProg(it) {
+    const out = {};
+    Object.keys(it).forEach(k => {
+      if (FACE_KEYS[k]) return;
+      const v = it[k];
+      if (isEmptyProg(k, v)) return;
+      out[k] = v;
+    });
+    return out;
+  }
+  function hasProg(p) { return p && Object.keys(p).length > 0; }
+
+  function buildMerged() {
+    const o = ov(), h = hidden(), arr = [];
+    for (let i = 0; i < baseOrder.length; i++) {
+      const id = baseOrder[i];
+      if (h.has(id)) continue;
+      const b = baseById.get(id);
+      const patch = o[id];
+      arr.push(patch ? Object.assign({}, b, patch, { id: id }) : Object.assign({}, b, { id: id }));
+    }
+    const ul = us();
+    for (let i = 0; i < ul.length; i++) arr.push(ul[i]);
+    return arr;
+  }
+
+  let contentCache = null; // = merged 缓存（对外语义保持原名）
 
   /* ================= CSV / Anki 解析（纯函数，可测试） ================= */
 
@@ -122,14 +218,6 @@
     return 0;
   }
 
-  /**
-   * 把 CSV 文本解析为内容条目数组 + 错误信息。
-   * 推荐（带表头）：
-   *   type,subject,question,optionA,optionB,optionC,optionD,answer,explain
-   *   quiz, 生理学, 题干..., A项, B项, C项, D项, A, 解析...
-   *   card, 生理学, 正面问题, , , , , , 背面答案
-   * 若首行识别为表头则用命名列；否则视为纯题库：subject,question,optA..D,answer,explain（全部按选择题解析）。
-   */
   function parseCsvToItems(text) {
     const rows = parseCsv(text);
     if (rows.length === 0) return { items: [], errors: ['未解析到任何数据行'], total: 0 };
@@ -169,7 +257,6 @@
           answer = parseAnswer(col(row, 'answer'));
         }
       } else {
-        // 无表头：subject,question,optA..D,answer,explain
         type = 'quiz';
         subject = (row[0] || '未分类').trim();
         chapter = '';
@@ -190,12 +277,6 @@
     return { items, errors, total: items.length };
   }
 
-  /**
-   * 解析 Anki 导出的「纯文本 / CSV」为记忆卡条目。
-   * 字段按表头名（front/back/tags/正面/背面/标签...）或位置映射：第 0 字段=正面，第 1 字段=背面。
-   * opts: { subject, chapter, tagSubjectIndex=0, tagChapterIndex=1 }
-   *   subject 给定时作为固定科目；否则取第 tagSubjectIndex 个标签；chapter 同理。
-   */
   function parseAnki(text, opts) {
     opts = opts || {};
     const firstLine = (String(text || '').split(/\r?\n/).find(l => l.trim() !== '') || '');
@@ -249,76 +330,142 @@
     daysAgo,
     addDays,
 
-    // ---- 内容（内存缓存，避免每次全量解析 localStorage） ----
+    // ---- 内置题面注册（仅内存，不落盘）----
+    /** 把 bundled 题面注册进内存 base；幂等（同内容主键只注册一次）。返回新增条数 */
+    registerBundled(items) {
+      const arr = items || [];
+      let n = 0;
+      for (let i = 0; i < arr.length; i++) {
+        const raw = arr[i];
+        if (!raw) continue;
+        const ck = ckeyOf(raw);
+        const id = sidOf(ck);
+        if (baseById.has(id)) continue;
+        const it = Object.assign({}, defaultProgress(), raw, {
+          id: id,
+          _bundled: true,
+          createdAt: BASE_TIME + (baseSeq++) * 1000
+        });
+        baseById.set(id, it);
+        baseOrder.push(id);
+        n++;
+      }
+      if (n) mergedCache = null;
+      return n;
+    },
+    /** 按匹配条件移除内置题面（含其进度与隐藏标记），返回移除数；用于“清除已导入真题” */
+    removeBundledBy(matchFn) {
+      const o = ov(), h = hidden();
+      let n = 0;
+      for (let i = baseOrder.length - 1; i >= 0; i--) {
+        const id = baseOrder[i];
+        const b = baseById.get(id);
+        let hit = false;
+        try { hit = matchFn(b); } catch (e) { hit = false; }
+        if (hit) {
+          baseById.delete(id);
+          baseOrder.splice(i, 1);
+          delete o[id];
+          h.delete(id);
+          n++;
+        }
+      }
+      if (n) { write(KEYS.progress, o); write(KEYS.hidden, Array.from(h)); mergedCache = null; }
+      return n;
+    },
+    bundledCount() { return baseOrder.length; },
+
+    // ---- 内容合并视图 ----
     getContent() {
-      if (!contentCache) contentCache = read(KEYS.content, []);
-      return contentCache;
+      if (!mergedCache) mergedCache = buildMerged();
+      contentCache = mergedCache;
+      return mergedCache;
     },
+    /** 兼容旧调用：整体保存（anki.migrate 等）。内置条目只抽进度，用户条目整条更新 */
     saveContent(list) {
-      contentCache = list;
-      write(KEYS.content, list);
+      const o = ov(), ul = us();
+      let uChanged = false;
+      (list || []).forEach(it => {
+        if (!it || !it.id) return;
+        if (baseById.has(it.id)) {
+          const p = pickProg(it);
+          if (hasProg(p)) o[it.id] = Object.assign({}, o[it.id], p);
+        } else {
+          const i = ul.findIndex(x => x.id === it.id);
+          if (i >= 0) ul[i] = it; else { ul.push(it); uChanged = true; }
+        }
+      });
+      write(KEYS.progress, o);
+      write(KEYS.users, ul);
+      mergedCache = null;
     },
-    /** 构建完整条目（id/默认字段） */
+    /** 构建完整条目（用户条目用，含随机 id 与默认字段） */
     makeItem(item) {
       return Object.assign({
         id: uid(),
-        type: 'quiz',           // quiz | card
+        type: 'quiz',
         subject: '未分类',
-        chapter: '',            // 章节（如：血液循环、糖代谢）
-        question: '',           // 选择题题干 / 记忆卡正面
-        options: [],            // 选择题选项 [A,B,C,D]
-        answer: 0,              // 选择题正确项索引
-        explain: '',            // 解析 / 记忆卡背面
-        stage: -1,              // -1 未学习; 0..n 艾宾浩斯阶段
-        nextReview: null,       // 下次复习日期 yyyy-mm-dd
-        reviewCount: 0,         // 累计复习次数
-        wrongCount: 0,          // 累计答错次数
+        chapter: '',
+        question: '',
+        options: [],
+        answer: 0,
+        explain: '',
+        stage: -1,
+        nextReview: null,
+        reviewCount: 0,
+        wrongCount: 0,
         graduated: false,
-        fav: false,             // 是否收藏
-        note: '',               // 个人笔记
-        noteUpdated: null,      // 笔记更新时间
-        image: '',              // 图片卡：图片路径（如 images/xx.png）
-        masks: [],              // 图片卡：挖空区域 [[x,y,w,h]...]（0-1 归一化）
+        fav: false,
+        note: '',
+        noteUpdated: null,
+        image: '',
+        masks: [],
         createdAt: Date.now()
       }, item);
     },
+    /** 用户新增条目（手动新建）→ users */
     addContent(item) {
-      const list = this.getContent();
       const full = this.makeItem(item);
-      list.push(full);
-      this.saveContent(list);
+      us().push(full);
+      saveUs();
       return full;
     },
     updateContent(id, patch) {
-      const list = this.getContent();
+      if (baseById.has(id)) {
+        const o = ov();
+        o[id] = Object.assign({}, o[id], patch);
+        saveOv();
+        return this.getById(id);
+      }
+      const list = us();
       const i = list.findIndex(x => x.id === id);
       if (i >= 0) {
         list[i] = Object.assign({}, list[i], patch);
-        this.saveContent(list);
+        saveUs();
+        return list[i];
       }
-      return i >= 0 ? list[i] : null;
+      return null;
     },
     removeContent(id) {
-      const list = this.getContent();
+      if (baseById.has(id)) {
+        // 内置条目“删除”= 隐藏（保留进度，取消隐藏可恢复）；同时不再出现在合并视图
+        hidden().add(id);
+        saveHidden();
+        return true;
+      }
+      const list = us();
       const idx = list.findIndex(x => x.id === id);
       if (idx < 0) return false;
-      // 移入回收站
       const trash = this.getTrash();
-      const item = list[idx];
-      trash.push(Object.assign({}, item, { _deletedAt: Date.now() }));
-      this.saveTrash(trash.slice(-200)); // 最多保留 200 条
+      trash.push(Object.assign({}, list[idx], { _deletedAt: Date.now() }));
+      this.saveTrash(trash.slice(-200));
       const next = list.filter(x => x.id !== id);
-      this.saveContent(next);
+      users = next;
+      saveUs();
       return true;
     },
-    /** 回收站：获取已删除条目 */
-    getTrash() {
-      return read(KEYS.trash, []);
-    },
-    saveTrash(arr) {
-      write(KEYS.trash, arr);
-    },
-    /** 从回收站恢复 */
+    getTrash() { return read(KEYS.trash, []); },
+    saveTrash(arr) { write(KEYS.trash, arr); },
     restoreFromTrash(id) {
       const trash = this.getTrash();
       const idx = trash.findIndex(x => x.id === id);
@@ -329,45 +476,84 @@
       this.saveTrash(trash.filter(x => x.id !== id));
       return true;
     },
-    /** 清空回收站 */
-    clearTrash() {
-      write(KEYS.trash, []);
+    clearTrash() { write(KEYS.trash, []); },
+    getById(id) { return this.getContent().find(x => x.id === id) || null; },
+    /** 兼容旧调用（整体替换）：吸收为 overlay/users，不保存题面 */
+    replaceAll(list) { this.absorbLegacy(list); },
+
+    /** 把旧版“整包条目”吸收进三层：匹配到内置的只取进度，其余整条进 users */
+    absorbLegacy(list) {
+      const o = ov();
+      const ul = us();
+      let nProg = 0, nUser = 0;
+      (list || []).forEach(it => {
+        if (!it) return;
+        const sid = sidOf(ckeyOf(it));
+        if (baseById.has(sid)) {
+          const p = pickProg(it);
+          if (hasProg(p)) { o[sid] = Object.assign({}, o[sid], p); nProg++; }
+        } else {
+          // 未匹配到内置：视为用户条目完整保留（去掉内置标记，保留原 id 以免断链）
+          const cp = Object.assign({}, it);
+          delete cp._bundled;
+          if (!cp.id) cp.id = uid();
+          if (!ul.some(x => x.id === cp.id)) { ul.push(cp); nUser++; }
+        }
+      });
+      write(KEYS.progress, o);
+      write(KEYS.users, ul);
+      mergedCache = null;
+      return { progress: nProg, users: nUser };
     },
-    getById(id) {
-      return this.getContent().find(x => x.id === id) || null;
-    },
-    replaceAll(list) {
-      this.saveContent(list);
+    /** 自愈：内置题面延迟注册后，把 users 中其实是内置条目的项转回纯进度，避免题面占空间 */
+    reabsorbUsers() {
+      const ul = us();
+      if (!ul.length) return 0;
+      const o = ov(); const keep = []; let n = 0;
+      ul.forEach(it => {
+        const sid = sidOf(ckeyOf(it));
+        if (baseById.has(sid)) { const p = pickProg(it); if (hasProg(p)) o[sid] = Object.assign({}, o[sid], p); n++; }
+        else keep.push(it);
+      });
+      if (n) { users = keep; write(KEYS.progress, o); write(KEYS.users, keep); mergedCache = null; }
+      return n;
     },
 
-    /** CSV 题库解析（暴露给 UI / 测试） */
-    parseCsv(text) {
-      return parseCsvToItems(text);
-    },
+    parseCsv(text) { return parseCsvToItems(text); },
+    parseAnki(text, opts) { return parseAnki(text, opts); },
 
-    /** Anki 导出的纯文本/CSV 解析（暴露给 UI / 测试） */
-    parseAnki(text, opts) {
-      return parseAnki(text, opts);
-    },
-
-    /** 批量添加到内容库（一次性写入，O(n)，适合上千条题库），返回成功数 */
+    /** 用户批量导入（CSV/Anki），完整条目进 users，返回条数 */
     bulkAdd(items) {
       const arr = items || [];
       if (!arr.length) return 0;
-      const list = this.getContent();
-      arr.forEach(it => { list.push(this.makeItem(it)); });
-      this.saveContent(list);
+      const ul = us();
+      arr.forEach(it => ul.push(this.makeItem(it)));
+      saveUs();
       return arr.length;
     },
 
-    /** 批量删除（一次性写入），返回删除数 */
     removeMany(ids) {
       const set = new Set(ids || []);
       if (!set.size) return 0;
-      const list = this.getContent();
-      const next = list.filter(x => !set.has(x.id));
-      this.saveContent(next);
-      return list.length - next.length;
+      // 内置：批量隐藏
+      const o = ov(), h = hidden();
+      let nHidden = 0;
+      set.forEach(id => { if (baseById.has(id) && !h.has(id)) { h.add(id); nHidden++; } });
+      // 用户：移入回收站并删除
+      const ul = us();
+      const trash = this.getTrash();
+      const kept = ul.filter(x => {
+        if (set.has(x.id)) { trash.push(Object.assign({}, x, { _deletedAt: Date.now() })); return false; }
+        return true;
+      });
+      let nUser = ul.length - kept.length;
+      if (nUser) { this.saveTrash(trash.slice(-200)); users = kept; }
+      if (nHidden || nUser) {
+        if (nHidden) write(KEYS.hidden, Array.from(h));
+        if (nUser) write(KEYS.users, users);
+        mergedCache = null;
+      }
+      return nHidden + nUser;
     },
 
     // ---- 设置 ----
@@ -382,12 +568,8 @@
     },
 
     // ---- 学习日志（每日统计） ----
-    getLog() {
-      return read(KEYS.log, {});
-    },
-    saveLog(log) {
-      write(KEYS.log, log);
-    },
+    getLog() { return read(KEYS.log, {}); },
+    saveLog(log) { write(KEYS.log, log); },
     logDay(dateStr, delta) {
       const log = this.getLog();
       if (!log[dateStr]) log[dateStr] = { review: 0, correct: 0, wrong: 0, newLearned: 0, graduated: 0, seconds: 0 };
@@ -403,52 +585,71 @@
     },
 
     // ---- 日期滚动标记 ----
-    getLastDate() {
-      return localStorage.getItem(KEYS.lastDate);
-    },
-    setLastDate(s) {
-      localStorage.setItem(KEYS.lastDate, s);
-    },
+    getLastDate() { return localStorage.getItem(KEYS.lastDate); },
+    setLastDate(s) { localStorage.setItem(KEYS.lastDate, s); },
 
     // ---- 整卷考试记录 ----
-    getExam() {
-      return read(KEYS.exam, []);
-    },
+    getExam() { return read(KEYS.exam, []); },
     addExam(rec) {
       const arr = this.getExam();
-      arr.unshift(rec);          // 最新在前
+      arr.unshift(rec);
       this.saveExam(arr.slice(0, 20));
       return arr;
     },
-    saveExam(list) {
-      write(KEYS.exam, list);
-    },
+    saveExam(list) { write(KEYS.exam, list); },
 
     // ---- 经验值 / 成就 ----
     getXp() {
       return Object.assign({ xp: 0, badges: [], relearn: 0, lastDate: '' }, read(KEYS.xp, null) || {});
     },
-    saveXp(s) {
-      write(KEYS.xp, s);
+    saveXp(s) { write(KEYS.xp, s); },
+
+    /* ---- 旧版整包迁移：把 ttgd.content.v1 抽成进度后删除，释放 ~8MB ---- */
+    migrateLegacyStorage() {
+      // 每次启动清洗 overlay 中的空项（历史版本可能残留），廉价且幂等
+      const _o = ov();
+      let cleaned = 0;
+      Object.keys(_o).forEach(k => { if (!_o[k] || Object.keys(_o[k]).length === 0) { delete _o[k]; cleaned++; } });
+      if (cleaned) write(KEYS.progress, _o);
+      if (localStorage.getItem(KEYS.storeVer) === '4') return { skipped: true, cleaned: cleaned };
+      const raw = localStorage.getItem(KEYS.legacyContent);
+      let summary = { migrated: 0 };
+      if (raw !== null) {
+        try {
+          const list = JSON.parse(raw);
+          summary = this.absorbLegacy(list);
+        } catch (e) {
+          console.warn('legacy content migrate failed', e);
+        }
+        // 无论成败都删除旧大 key：题面可由 bundled 重建，进度已抽取；避免继续占满配额
+        localStorage.removeItem(KEYS.legacyContent);
+        contentCache = null; mergedCache = null;
+      }
+      localStorage.setItem(KEYS.storeVer, '4');
+      return summary;
     },
 
-    // ---- 全部导出/导入 ----
+    // ---- 全部导出（v4 精简：不含内置题面，仅进度/用户条目/记录）----
     exportAll() {
-      // 除核心 key 外，把所有其他 ttgd.* key（学习计划/学习记录/题库等）一并纳入同步
-      const CORE = [KEYS.content, KEYS.settings, KEYS.log, KEYS.trash, KEYS.xp, KEYS.lastDate, KEYS.exam];
+      const SKIP = { 'ttgd.sync.meta':1, 'ttgd.bundled.v1':1 };
       const extra = {};
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k && k.indexOf('ttgd.') === 0 && k !== 'ttgd.sync.meta' && k !== 'ttgd.bundled.v1' && CORE.indexOf(k) < 0) {
+        if (k && k.indexOf('ttgd.') === 0 && !SKIP[k] &&
+          k !== KEYS.progress && k !== KEYS.users && k !== KEYS.hidden && k !== KEYS.storeVer &&
+          k !== KEYS.settings && k !== KEYS.log && k !== KEYS.trash && k !== KEYS.xp &&
+          k !== KEYS.lastDate && k !== KEYS.exam && k !== KEYS.legacyContent) {
           try { extra[k] = localStorage.getItem(k); } catch (e) {}
         }
       }
       return JSON.stringify({
         app: 'tiantian-gundong',
-        version: 3,
+        version: 4,
         exportedAt: new Date().toISOString(),
         settings: this.getSettings(),
-        content: this.getContent(),
+        progress: ov(),
+        hidden: Array.from(hidden()),
+        userItems: us(),
         log: this.getLog(),
         trash: this.getTrash(),
         xp: this.getXp(),
@@ -460,25 +661,49 @@
     importAll(jsonStr) {
       const data = JSON.parse(jsonStr);
       if (!data || data.app !== 'tiantian-gundong') throw new Error('不是有效的「天天滚动」导出文件');
-      if (Array.isArray(data.content)) this.replaceAll(data.content);
+
+      if (data.version >= 4) {
+        // 新格式：合并进度（云端覆盖同条目）、用户条目（按 id 去重）
+        if (data.progress && typeof data.progress === 'object') {
+          const o = ov();
+          Object.keys(data.progress).forEach(k => { o[k] = Object.assign({}, o[k], data.progress[k]); });
+          write(KEYS.progress, o);
+        }
+        if (Array.isArray(data.hidden)) { const h = hidden(); data.hidden.forEach(x => h.add(x)); write(KEYS.hidden, Array.from(h)); }
+        if (Array.isArray(data.userItems)) {
+          const ul = us();
+          data.userItems.forEach(it => { if (!ul.some(x => x.id === it.id)) ul.push(it); });
+          write(KEYS.users, ul);
+        }
+      } else if (Array.isArray(data.content)) {
+        // 旧格式（整包题面）：只吸收进度/用户条目，不回写题面（避免撑爆配额）
+        this.absorbLegacy(data.content);
+        if (Array.isArray(data.trash)) this.saveTrash(data.trash);
+      }
+
       if (data.settings) write(KEYS.settings, data.settings);
       if (data.log) this.saveLog(data.log);
-      if (Array.isArray(data.trash)) this.saveTrash(data.trash);
       if (data.xp) write(KEYS.xp, data.xp);
       if (data.lastDate != null && data.lastDate !== '') this.setLastDate(data.lastDate);
       if (Array.isArray(data.exam)) this.saveExam(data.exam);
+      if (data.version >= 4 && Array.isArray(data.trash)) this.saveTrash(data.trash);
       if (data.extra && typeof data.extra === 'object') {
-        Object.keys(data.extra).forEach(k => {
-          try { localStorage.setItem(k, data.extra[k]); } catch (e) {}
-        });
+        Object.keys(data.extra).forEach(k => { try { localStorage.setItem(k, data.extra[k]); } catch (e) {} });
       }
-      return data.content ? data.content.length : 0;
+      mergedCache = null;
+      // 返回进度条数，供调用方判断
+      return Object.keys(ov()).length;
     },
 
     resetAll() {
-      Object.keys(KEYS).forEach(k => localStorage.removeItem(KEYS[k]));
+      Object.keys(KEYS).forEach(k => {
+        const key = KEYS[k];
+        if (key.indexOf('ttgd.') === 0) localStorage.removeItem(key);
+      });
       localStorage.removeItem('ttgd.bundled.v1');
-      contentCache = null;
+      overlay = {}; users = []; hiddenSet = new Set();
+      baseById.clear(); baseOrder.length = 0;
+      contentCache = null; mergedCache = null;
     },
 
     /** 估算存储用量（字节），返回格式化字符串 */
@@ -488,13 +713,13 @@
         var k = localStorage.key(i);
         if (k && k.indexOf('ttgd.') === 0) {
           var v = localStorage.getItem(k);
-          total += (k.length + (v ? v.length : 0)) * 2; // UTF-16 每字符 2 字节
+          total += (k.length + (v ? v.length : 0)) * 2;
         }
       }
       var unit = 'B';
       if (total > 1024) { total = total / 1024; unit = 'KB'; }
       if (total > 1024) { total = total / 1024; unit = 'MB'; }
-      return total.toFixed(1) + ' ' + unit;
+      return total.toFixed(2) + ' ' + unit;
     }
   };
 
