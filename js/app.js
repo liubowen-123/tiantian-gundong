@@ -220,7 +220,7 @@
       wrap.innerHTML =
         '<div class="img-snippet-label">📎 对应导图片段 · 点击看全图</div>' +
         '<div class="img-snippet-viewport" style="aspect-ratio:' + ratio.toFixed(3) + '">' +
-        '<img src="' + esc(sn.card.image) + '" alt="导图片段" loading="lazy" style="width:' + iwPct + '%;height:' + ihPct + '%;left:' + lPct + '%;top:' + tPct + '%">' +
+        '<img src="' + esc(ossThumb(sn.card.image, 1400, 85)) + '" alt="导图片段" loading="lazy" style="width:' + iwPct + '%;height:' + ihPct + '%;left:' + lPct + '%;top:' + tPct + '%">' +
         '</div>' +
         '<div class="img-snippet-foot">' + esc(cleanChapter(sn.card.chapter || '')) + ' 导图' + (sn.sameCh ? '' : '（同科目匹配）') + '</div>';
       wrap.querySelector('.img-snippet-viewport').addEventListener('click', function () { openZoomViewer(sn.card); });
@@ -234,6 +234,12 @@
     t.textContent = msg;
     document.body.appendChild(t);
     setTimeout(() => t.remove(), 1800);
+  }
+
+  function ossThumb(url, w, q) {
+    const u = String(url || '');
+    if (u.indexOf('aliyuncs.com') < 0 || u.indexOf('?') >= 0) return u;
+    return u + '?x-oss-process=image/resize,w_' + w + '/format,jpg/quality,q_' + (q || 82);
   }
 
   function esc(s) {
@@ -886,7 +892,7 @@
             return `
             <div class="ch-acc" data-ch="${esc(c.chapter)}" data-subject="${esc(App.imgBrowseSub)}">
               <div class="ch-row" role="button" tabindex="0" data-ch="${esc(c.chapter)}" aria-expanded="false">
-                <img class="ch-thumb" src="${esc(first ? first.image : '')}" loading="lazy" alt="">
+                <img class="ch-thumb" src="${esc(first ? ossThumb(first.image, 240, 80) : '')}" loading="lazy" alt="">
                 <div class="ch-info">
                   <div class="ch-name">${esc(cleanChapter(c.chapter))}</div>
                   <div class="ch-count">${c.count} 张</div>
@@ -908,7 +914,7 @@
         <div class="img-grid">
           ${cards.map(c => `
             <div class="img-cell" data-id="${c.id}" title="点图学习这张卡">
-              <img class="img-cell-img" src="${esc(c.image)}" loading="lazy" alt="">
+              <img class="img-cell-img" src="${esc(ossThumb(c.image, 480, 82))}" loading="lazy" alt="">
             </div>`).join('')}
         </div>
         <div class="img-grid-tip">👆 点任意一张图，直接学习该卡</div>`;
@@ -1004,7 +1010,7 @@
         <div class="img-grid">
           ${cards.map(c => `
             <div class="img-cell" data-id="${c.id}" title="点图学习这张卡">
-              <img class="img-cell-img" src="${esc(c.image)}" loading="lazy" alt="">
+              <img class="img-cell-img" src="${esc(ossThumb(c.image, 480, 82))}" loading="lazy" alt="">
             </div>`).join('')}
         </div>
         <div class="img-grid-tip">👆 点任意一张图，直接学习该卡</div>
@@ -1065,6 +1071,7 @@
     updateLearnTimer();
 
     const body = $('#learn-body');
+    body.querySelectorAll('img').forEach(im => { im.removeAttribute('src'); im.src = ''; });
     if (it.type === 'quiz') {
       body.innerHTML = renderQuiz(it);
       bindQuiz(it);
@@ -1263,7 +1270,7 @@
           ${typeTag}${stateTag}
         </div>
         <div class="imgcard" id="imgcard">
-          <img class="imgcard-img" src="${esc(it.image)}" alt="看图记忆卡" loading="lazy">
+          <img class="imgcard-img" src="${esc(ossThumb(it.image, 1800, 88))}" alt="看图记忆卡" loading="lazy">
           <div class="imgcard-masks">${boxes}</div>
         </div>
         <div class="imgcard-hint">👆 点击空白处，查看对应答案</div>
@@ -1369,7 +1376,7 @@
       scale = Math.min(5, Math.max(1, scale * delta));
       apply();
     }, { passive: false });
-    ov.querySelector('#zoom-close').addEventListener('click', () => ov.remove());
+    ov.querySelector('#zoom-close').addEventListener('click', () => { ov.querySelectorAll('img').forEach(im => { im.removeAttribute('src'); }); ov.remove(); });
   }
 
   function renderAnkiButtons(it) {
