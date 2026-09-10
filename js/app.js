@@ -4254,3 +4254,64 @@ async function savePaperExamRecord(resultData){
   // 调用存储模块写入考试记录
   await TTStore.saveExamRecord(resultData);
 }
+// 真题交卷按钮：paper-submit
+let paperSubmitting = false;
+document.body.addEventListener("click", async function (e) {
+  if (e.target.id === "paper-submit") {
+    if (paperSubmitting) return;
+    await submitPaperExam();
+  }
+});
+
+async function submitPaperExam() {
+  paperSubmitting = true;
+  try {
+    const exam = window.currentPaperExam;
+    if (!exam) {
+      alert("❌ 试卷实例不存在，请重新进入考试页面");
+      paperSubmitting = false;
+      return;
+    }
+    const unAnsweredCount = exam.getUnAnsweredCount();
+    let confirmDom = document.getElementById('paperConfirmModal');
+    if(confirmDom) confirmDom.remove();
+
+    // 弹窗样式
+    confirmDom = document.createElement('div');
+    confirmDom.id = "paperConfirmModal";
+    confirmDom.style = `position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;`;
+    confirmDom.innerHTML = `
+      <div style="background:#fff;padding:24px;border-radius:12px;max-width:400px;width:90%;">
+        <h3 style="margin-top:0;">确认交卷</h3>
+        <p>还有 <b>${unAnsweredCount}</b> 题未作答，确定提交试卷吗？</p>
+        <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;">
+          <button id="cancelSubmit" style="padding:6px 14px;">取消</button>
+          <button id="okSubmit" style="padding:6px 14px;background:#2563eb;color:white;border:none;border-radius:6px;">确认交卷</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(confirmDom);
+
+    // 取消按钮
+    confirmDom.querySelector("#cancelSubmit").onclick = () => {
+      confirmDom.remove();
+      paperSubmitting = false;
+    };
+    // 确认交卷
+    confirmDom.querySelector("#okSubmit").onclick = async () => {
+      confirmDom.remove();
+      await exam.calcScore();
+      exam.showResultPage();
+      await savePaperExamRecord(exam.getResultData());
+      paperSubmitting = false;
+    }
+  } catch (err) {
+    console.error("交卷异常：", err);
+    alert("交卷出错，请查看控制台");
+    paperSubmitting = false;
+  }
+}
+
+async function savePaperExamRecord(resultData){
+  await TTStore.saveExamRecord(resultData);
+}
