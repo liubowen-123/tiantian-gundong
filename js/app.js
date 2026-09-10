@@ -441,6 +441,9 @@
         renderPractice();
       });
     }
+    const pm = paperMetaList();
+    $('#paper-desc').textContent = pm.length ? pm[0].name : '暂无可考整卷';
+
     const rec = TTScheduler.dailyRecord();
     $('#p-rec-info').textContent = `今日 ${rec.todayCount} 题 · 已记录 ${rec.recordedDays} 天`;
 
@@ -3434,6 +3437,7 @@
     on('#entry-img', 'click', openImageBrowse);
     on('#entry-qbank', 'click', openQBank);
     on('#entry-year', 'click', openYearPractice);
+    on('#entry-paper', 'click', openPaperList);
     $('#entry-search').addEventListener('click', () => {
       App.libFilter = 'all';
       App.libSearch = '';
@@ -3585,6 +3589,7 @@
     try {
       importBundled();                // 注册内置图片卡到内存
       registerBundledQuestions();     // 恢复已导入科目真题到内存
+      registerBundledPaper();         // 注册整卷真题（历年真题卷）到内存
       TTStore.migrateLegacyStorage(); // 旧整包题面抽进度后删除，释放本地存储
       removeSamples();
       TTAnki.migrate();
@@ -3795,6 +3800,344 @@
   }
 
 
+
+  /** 注册整卷真题（历年真题卷）到内存 base（不落盘，刷新由内置文件重建） */
+  function registerBundledPaper() {
+    try {
+      if (!window.TTBundledPaper || !window.TTBundledPaper.length) return 0;
+      var n = TTStore.registerBundled(window.TTBundledPaper);
+      TTStore.reabsorbUsers();
+      return n;
+    } catch (e) {
+      console.warn('整卷真题注册失败', e);
+      return 0;
+    }
+  }
+
+  /* ================= 历年真题卷（整卷考试） ================= */
+  function paperMetaList() { return window.TTPAPER_META ? [window.TTPAPER_META] : []; }
+  function paperResultKey(id) { return 'ttgd.paper.result.' + id; }
+  function paperProgKey(id) { return 'ttgd.paper.prog.' + id; }
+  function paperResults(id) {
+    try { return JSON.parse(localStorage.getItem(paperResultKey(id)) || '[]'); } catch (e) { return []; }
+  }
+  function paperProgress(id) {
+    try { return JSON.parse(localStorage.getItem(paperProgKey(id)) || 'null'); } catch (e) { return null; }
+  }
+  function fmtMMSS(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    var m = Math.floor(sec / 60), s = sec % 60;
+    return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  function openPaperList() {
+    const papers = paperMetaList();
+    if (!papers.length) { toast('未加载到试卷数据，请通过 http://127.0.0.1:8341 打开'); return; }
+    openModal(`
+      <div class="modal-title">历年真题卷</div>
+      <div class="wrong-summary">整卷作答 · 按卷首评分标准自动给分 · 作答进度自动保存</div>
+      <div class="img-ch-list">
+        ${papers.map(p => {
+          const rs = paperResults(p.id);
+          const prog = paperProgress(p.id);
+          const last = rs[0];
+          return `<div class="paper-row">
+            <div class="paper-row-main">
+              <div class="paper-row-name">${esc(p.name)}</div>
+              <div class="paper-row-sub">${esc(p.desc)}</div>
+              <div class="paper-row-sub">共 ${p.sections.reduce((s,x)=>s+x.to-x.from+1,0)} 题 · 总分 ${p.total} 分${rs.length ? ' · 已考 ' + rs.length + ' 次，最近 ' + last.score + ' 分（' + fmtDate(last.date) + '）' : ''}${prog ? ' · 有未交卷的作答' : ''}</div>
+            </div>
+            <div class="paper-row-actions">
+              ${prog ? `<button class="btn-cancel" data-paper-resume="${p.id}">继续作答</button>` : ''}
+              <button class="btn-primary" data-paper-start="${p.id}">${rs.length ? '重新作答' : '开始考试'}</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="template-hint" style="margin-bottom:12px">评分标准：A 型 1~40 每题 1.5 分、41~115 每题 2 分；B 型每题 1.5 分；X 型每题 2 分（错选、多选、少选均不得分）。答案由 AI 整理，仅供参考，请以官方解析为准。</div>
+      <div class="modal-actions"><button class="btn-cancel" id="paper-list-close">关闭</button></div>
+    `);
+    $('#paper-list-close').addEventListener('click', closeModal);
+    $$('.paper-row [data-paper-start]').forEach(b => b.addEventListener('click', () => {
+      closeModal(); startPaper(b.dataset.paperStart, false);
+    }));
+    $$('.paper-row [data-paper-resume]').forEach(b => b.addEventListener('click', () => {
+      closeModal(); startPaper(b.dataset.paperResume, true);
+    }));
+  }
+
+  function startPaper(paperId, resume) {
+    const meta = paperMetaList().find(p => p.id === paperId);
+    if (!meta) { toast('试卷不存在'); return; }
+    const all = (window.TTBundledPaper || []).filter(x => x.exam === paperId).slice().sort((a, b) => a.qnum - b.qnum);
+    if (!all.length) { toast('试卷题目未加载'); return; }
+    const prog = resume ? paperProgress(paperId) : null;
+    App.paper = {
+      meta: meta, list: all, idx: 0,
+      answers: (prog && prog.answers) ? prog.answers : {},
+      startTs: (prog && prog.startTs) ? prog.startTs : Date.now(),
+      running: true
+    };
+    openPaperOverlay();
+    renderPaperQ();
+  }
+
+  function paperOverlayHTML() {
+    return `
+    <div class="paper-overlay" id="paper-overlay">
+      <div class="paper-head">
+        <button class="paper-back" id="paper-back">‹ 退出</button>
+        <div class="paper-head-mid">
+          <div class="paper-title">${esc(App.paper.meta.name)}</div>
+          <div class="paper-progress"><div class="paper-progress-fill" id="paper-prog-fill"></div></div>
+        </div>
+        <div class="paper-head-right">
+          <span class="paper-timer" id="paper-timer">⏱ 00:00</span>
+          <button class="btn-cancel paper-sheet-btn" id="paper-sheet">答题卡</button>
+          <button class="btn-primary paper-submit-btn" id="paper-submit">交卷</button>
+        </div>
+      </div>
+      <div class="paper-body" id="paper-body"></div>
+      <div class="paper-foot">
+        <button class="btn-cancel" id="paper-prev">‹ 上一题</button>
+        <button class="btn-ghost" id="paper-clear-ans" style="color:var(--danger);border-color:#fecaca">清除本题</button>
+        <button class="btn-primary" id="paper-next">下一题 ›</button>
+      </div>
+    </div>`;
+  }
+
+  function openPaperOverlay() {
+    const old = document.getElementById('paper-overlay');
+    if (old) old.remove();
+    const div = document.createElement('div');
+    div.innerHTML = paperOverlayHTML();
+    document.body.appendChild(div.firstElementChild);
+    $('#paper-back').addEventListener('click', confirmExitPaper);
+    $('#paper-prev').addEventListener('click', () => gotoPaper(App.paper.idx - 1));
+    $('#paper-next').addEventListener('click', () => gotoPaper(App.paper.idx + 1));
+    $('#paper-sheet').addEventListener('click', openPaperSheet);
+    $('#paper-submit').addEventListener('click', () => confirmSubmitPaper());
+    $('#paper-clear-ans').addEventListener('click', () => {
+      delete App.paper.answers[App.paper.list[App.paper.idx].qnum];
+      savePaperProg();
+      renderPaperQ();
+    });
+    startPaperTimer();
+  }
+
+  function savePaperProg() {
+    try {
+      localStorage.setItem(paperProgKey(App.paper.meta.id),
+        JSON.stringify({ answers: App.paper.answers, startTs: App.paper.startTs }));
+    } catch (e) {}
+  }
+
+  function gotoPaper(i) {
+    if (!App.paper || i < 0 || i >= App.paper.list.length) return;
+    App.paper.idx = i;
+    renderPaperQ();
+  }
+
+  function renderPaperQ() {
+    if (!App.paper || !App.paper.running) return;
+    const it = App.paper.list[App.paper.idx];
+    const meta = App.paper.meta;
+    const sec = meta.sections.find(s => it.qnum >= s.from && it.qnum <= s.to);
+    const sel = App.paper.answers[it.qnum] || [];
+    const isMulti = it.qtype === 'X';
+    const opts = ['A', 'B', 'C', 'D'].map((L, i) => `
+      <div class="paper-opt ${sel.indexOf(i) >= 0 ? 'sel' : ''}" data-opt="${i}">
+        <span class="paper-opt-key">${L}</span>
+        <span class="paper-opt-text">${esc(it.options[i] || '')}</span>
+        ${isMulti ? '<span class="paper-opt-tag">多选</span>' : ''}
+      </div>`).join('');
+    $('#paper-body').innerHTML = `
+      <div class="paper-q-meta">
+        <span class="paper-q-badge">${it.qtype} 型 · 第 ${it.qnum} 题</span>
+        <span class="paper-q-points">${sec.points} 分${isMulti ? ' · 多选，全对才得分' : ''}</span>
+      </div>
+      <div class="paper-q-stem">${esc(it.question)}</div>
+      <div class="paper-opts">${opts}</div>`;
+    $$('.paper-opt').forEach(el => el.addEventListener('click', () => {
+      const i = Number(el.dataset.opt);
+      let cur = App.paper.answers[it.qnum] || [];
+      if (isMulti) {
+        cur = cur.indexOf(i) >= 0 ? cur.filter(x => x !== i) : cur.concat([i]).sort();
+      } else {
+        cur = [i];
+      }
+      if (cur.length) App.paper.answers[it.qnum] = cur; else delete App.paper.answers[it.qnum];
+      savePaperProg();
+      renderPaperQ();
+    }));
+    const total = App.paper.list.length;
+    $('#paper-prog-fill').style.width = Math.round((App.paper.idx + 1) / total * 100) + '%';
+    $('#paper-prev').disabled = App.paper.idx === 0;
+    $('#paper-next').textContent = App.paper.idx === total - 1 ? '最后一题' : '下一题 ›';
+  }
+
+  function openPaperSheet() {
+    const total = App.paper.list.length;
+    const doneCount = Object.keys(App.paper.answers).filter(k => App.paper.answers[k] && App.paper.answers[k].length).length;
+    const grid = App.paper.list.map((it, i) => {
+      const has = App.paper.answers[it.qnum] && App.paper.answers[it.qnum].length;
+      const cur = i === App.paper.idx;
+      return `<div class="sheet-cell ${has ? 'done' : ''} ${cur ? 'cur' : ''}" data-goto="${i}">${it.qnum}</div>`;
+    }).join('');
+    openModal(`
+      <div class="modal-title">答题卡</div>
+      <div class="wrong-summary">已答 <b>${doneCount}</b> / ${total} 题 · 点击题号跳转</div>
+      <div class="paper-sheet-grid">${grid}</div>
+      <div class="modal-actions"><button class="btn-cancel" id="sheet-close">关闭</button></div>
+    `);
+    $('#sheet-close').addEventListener('click', closeModal);
+    $$('.sheet-cell').forEach(c => c.addEventListener('click', () => {
+      closeModal();
+      gotoPaper(Number(c.dataset.goto));
+    }));
+  }
+
+  /* ---- 计时 ---- */
+  let paperTimerInt = null;
+  function startPaperTimer() {
+    stopPaperTimer();
+    updatePaperTimer();
+    paperTimerInt = setInterval(updatePaperTimer, 1000);
+  }
+  function stopPaperTimer() {
+    if (paperTimerInt) { clearInterval(paperTimerInt); paperTimerInt = null; }
+  }
+  function updatePaperTimer() {
+    const el = document.getElementById('paper-timer');
+    if (!el || !App.paper) return;
+    el.textContent = '⏱ ' + fmtMMSS((Date.now() - App.paper.startTs) / 1000);
+  }
+
+  function paperDialog(title, msg, okText, onOk) {
+    openModal(`
+      <div class="modal-title">${title}</div>
+      <div class="wrong-summary" style="white-space:pre-wrap">${msg}</div>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="pd-cancel">取消</button>
+        <button class="btn-primary" id="pd-ok">${okText}</button>
+      </div>`);
+    $('#pd-cancel').addEventListener('click', closeModal);
+    $('#pd-ok').addEventListener('click', () => { closeModal(); onOk(); });
+  }
+
+  function confirmExitPaper() {
+    paperDialog('退出考试', '退出后作答进度会保留，可随时从「历年真题卷」继续。', '退出', function() {
+      stopPaperTimer();
+      const ov = document.getElementById('paper-overlay');
+      if (ov) ov.remove();
+      App.paper = null;
+      renderPractice();
+    });
+  }
+
+  function confirmSubmitPaper() {
+    const total = App.paper.list.length;
+    const done = Object.keys(App.paper.answers).filter(k => App.paper.answers[k] && App.paper.answers[k].length).length;
+    const msg = done < total ? '还有 ' + (total - done) + ' 题未作答，确定交卷？' : '确定交卷？交卷后将按评分标准自动计分。';
+    paperDialog('交卷', msg, '确认交卷', submitPaper);
+  }
+
+  function scorePaper() {
+    const meta = App.paper.meta, list = App.paper.list;
+    let correct = 0;
+    const secGot = {}, secFull = {};
+    meta.sections.forEach(s => { secGot[s.label] = 0; secFull[s.label] = (s.to - s.from + 1) * s.points; });
+    const wrongs = [];
+    let unanswered = 0;
+    list.forEach(it => {
+      const right = Array.isArray(it.answer) ? it.answer : [it.answer];
+      const sel = App.paper.answers[it.qnum] || [];
+      const ok = sel.length === right.length && right.every(i => sel.indexOf(i) >= 0);
+      const sec = meta.sections.find(s => it.qnum >= s.from && it.qnum <= s.to);
+      if (ok) { correct++; secGot[sec.label] += sec.points; }
+      else if (sel.length === 0) { unanswered++; }
+      else { wrongs.push(it); }
+    });
+    const score = meta.sections.reduce((s, x) => s + secGot[x.label], 0);
+    return { score: score, correct: correct, total: list.length, secGot: secGot, secFull: secFull, wrongs: wrongs, unanswered: unanswered, seconds: Math.round((Date.now() - App.paper.startTs) / 1000) };
+  }
+
+  function submitPaper() {
+    stopPaperTimer();
+    const r = scorePaper();
+    try {
+      const arr = paperResults(App.paper.meta.id);
+      arr.unshift({ score: r.score, correct: r.correct, total: r.total, seconds: r.seconds, date: Date.now() });
+      localStorage.setItem(paperResultKey(App.paper.meta.id), JSON.stringify(arr.slice(0, 20)));
+      localStorage.removeItem(paperProgKey(App.paper.meta.id));
+    } catch (e) {}
+    renderPaperResult(r);
+  }
+
+  function renderPaperResult(r) {
+    const meta = App.paper.meta;
+    App.paper.running = false;
+    const secRows = meta.sections.map(s => {
+      const got = r.secGot[s.label], full = r.secFull[s.label];
+      const pct = full > 0 ? Math.round(got / full * 100) : 0;
+      return `
+        <div class="res-sec-row">
+          <span class="res-sec-name">${s.label}</span>
+          <div class="res-sec-bar"><div class="res-sec-fill ${pct >= 60 ? 'ok' : 'bad'}" style="width:${pct}%"></div></div>
+          <span class="res-sec-num">${got} / ${full}</span>
+        </div>`;
+    }).join('');
+    const wrongHtml = r.wrongs.length === 0
+      ? '<div style="text-align:center;color:var(--text-3);padding:18px 0">全部正确，太棒了！🎉</div>'
+      : r.wrongs.map(it => {
+        const right = Array.isArray(it.answer) ? it.answer : [it.answer];
+        const sel = App.paper.answers[it.qnum] || [];
+        const rightStr = right.map(i => 'ABCD'[i]).join('');
+        const selStr = sel.length ? sel.map(i => 'ABCD'[i]).join('') : '未作答';
+        return `
+        <div class="res-wrong">
+          <div class="res-wrong-head"><span class="paper-q-badge">${it.qtype} 型 · 第 ${it.qnum} 题</span>${selStr === rightStr ? '' : `<span class="res-wrong-mark">答错</span>`}</div>
+          <div class="res-wrong-q">${esc(it.question)}</div>
+          <div class="res-wrong-ans">你的答案：<b class="${selStr === rightStr ? 'ok' : 'bad'}">${esc(selStr)}</b> · 正确答案：<b class="ok">${rightStr}</b></div>
+          ${it.explain ? `<div class="res-wrong-ex">解析：${esc(it.explain)}</div>` : ''}
+        </div>`;
+      }).join('');
+    $('#paper-body').innerHTML = `
+      <div class="paper-result">
+        <div class="res-score">${r.score}<span class="res-score-full"> / ${meta.total} 分</span></div>
+        <div class="res-sub">答对 ${r.correct} / ${r.total} 题 · 用时 ${fmtMMSS(r.seconds)}${r.unanswered ? ' · 未作答 ' + r.unanswered + ' 题' : ''}</div>
+        <div class="res-sections">${secRows}</div>
+        <div class="res-wrong-title">错题回顾（答错 ${r.wrongs.length} 题）</div>
+        <div class="res-wrongs">${wrongHtml}</div>
+        <div class="res-actions">
+          <button class="btn-cancel" id="res-exit">返回练习页</button>
+          <button class="btn-primary" id="res-retry">再考一次</button>
+        </div>
+      </div>`;
+    $('#paper-submit').style.display = 'none';
+    $('#paper-sheet').style.display = 'none';
+    $('#paper-timer').textContent = '⏱ 已交卷';
+    const pf = document.querySelector('.paper-foot');
+    if (pf) pf.style.display = 'none';
+    $('#paper-back').textContent = '‹ 返回';
+    $('#paper-back').onclick = function() {
+      const ov = document.getElementById('paper-overlay');
+      if (ov) ov.remove();
+      App.paper = null;
+      renderPractice();
+    };
+    $('#res-exit').addEventListener('click', () => {
+      const ov = document.getElementById('paper-overlay');
+      if (ov) ov.remove();
+      App.paper = null;
+      renderPractice();
+    });
+    $('#res-retry').addEventListener('click', () => {
+      const id = App.paper.meta.id;
+      App.paper = null;
+      startPaper(id, false);
+    });
+  }
 
   /** 动态加载 JS 脚本，返回 Promise */
   function loadScript(src) {
