@@ -30,7 +30,32 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon.svg">
-<link rel="stylesheet" href="css/style.css?v=20260910c">
+<link rel="stylesheet" href="css/style.css?v=20260910e">
+<!-- 学习计划 · 放大可读性覆盖层（2026-09-10：放大每日任务字号、加大间距，防止内容被遮挡） -->
+<style>
+.plan-task-list { gap: 12px; margin-top: 14px; max-height: 62vh; padding: 4px; }
+.plan-task { border-radius: 16px; padding: 16px 17px; }
+.pt-top { gap: 10px; margin-bottom: 9px; }
+.pt-round { font-size: 12.5px; border-radius: 7px; padding: 3px 10px; }
+.pt-title { font-size: 17px; line-height: 1.55; }
+.pt-sub { font-size: 14.5px; margin-top: 7px; line-height: 1.6; }
+.pt-check { font-size: 17px; }
+.plan-title { font-size: 16px; }
+.plan-day-badge { font-size: 13px; }
+.plan-date { font-size: 13px; }
+.plan-progress-text { font-size: 12.5px; margin-top: 7px; }
+.plan-done-banner b { font-size: 15.5px; }
+.plan-grid-tip { font-size: 12px; }
+.pg-cell { font-size: 11px; }
+.pg-cell .pg-d { font-size: 10px; }
+@media (min-width: 640px) {
+  .pt-title { font-size: 18px; }
+  .pt-sub { font-size: 15.5px; }
+  .plan-task { padding: 18px 19px; }
+  .plan-task-list { max-height: 60vh; }
+}
+</style>
+
 </head>
 <body>
 <div id="app">
@@ -428,20 +453,20 @@
   <div class="modal-mask hidden" id="modal-mask"></div>
 </div>
 
-<script src="js/storage.js?v=20260910c" defer></script>
-<script src="js/scheduler.js?v=20260910c" defer></script>
-<script src="js/anki.js?v=20260910c" defer></script>
-<script src="js/data.js?v=20260910c" defer></script>
-<script src="js/bundled_imagecards.js?v=20260910c" defer></script>
-<script src="js/bundled_questions.js?v=20260910c" defer></script>
-<script src="js/paper_data.js?v=20260910c" defer></script>
-<script src="js/img_ocr_index.js?v=20260910c" defer></script>
-<script src="js/plan-data.js?v=20260910c" defer></script>
-<script src="js/app.js?v=20260910c" defer></script>
-<script src="js/vendor/supabase.min.js?v=20260910c" defer></script>
-<script src="js/supabase-config.js?v=20260910c" defer></script>
-<script src="js/sync.js?v=20260910c" defer></script>
-<script src="js/ai.js?v=20260910c" defer></script>
+<script src="js/storage.js?v=20260910e" defer></script>
+<script src="js/scheduler.js?v=20260910e" defer></script>
+<script src="js/anki.js?v=20260910e" defer></script>
+<script src="js/data.js?v=20260910e" defer></script>
+<script src="js/bundled_imagecards.js?v=20260910e" defer></script>
+<script src="js/bundled_questions.js?v=20260910e" defer></script>
+<script src="js/paper_data.js?v=20260910e" defer></script>
+<script src="js/img_ocr_index.js?v=20260910e" defer></script>
+<script src="js/plan-data.js?v=20260910e" defer></script>
+<script src="js/app.js?v=20260910e" defer></script>
+<script src="js/vendor/supabase.min.js?v=20260910e" defer></script>
+<script src="js/supabase-config.js?v=20260910e" defer></script>
+<script src="js/sync.js?v=20260910e" defer></script>
+<script src="js/ai.js?v=20260910e" defer></script>
 <script>
 // PWA：注册 Service Worker（离线缓存 + 可安装）
 if ('serviceWorker' in navigator) {

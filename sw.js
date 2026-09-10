@@ -1,22 +1,22 @@
 /* 天天滚动 · Service Worker（PWA 离线缓存 + 版本更新提示） */
-const CACHE = 'ttgd-v6';
+const CACHE = 'ttgd-v8';
 const IMG_CACHE = 'ttgd-img-v3';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  './css/style.css?v=20260910c',
-  './js/storage.js?v=20260910c',
-  './js/scheduler.js?v=20260910c',
-  './js/anki.js?v=20260910c',
-  './js/data.js?v=20260910c',
-  './js/bundled_questions.js?v=20260910c',
-  './js/bundled_imagecards.js?v=20260910c',
-  './js/plan-data.js?v=20260910c',
-  './js/app.js?v=20260910c',
+  './css/style.css?v=20260910e',
+  './js/storage.js?v=20260910e',
+  './js/scheduler.js?v=20260910e',
+  './js/anki.js?v=20260910e',
+  './js/data.js?v=20260910e',
+  './js/bundled_questions.js?v=20260910e',
+  './js/bundled_imagecards.js?v=20260910e',
+  './js/plan-data.js?v=20260910e',
+  './js/app.js?v=20260910e',
   './js/vendor/supabase.min.js',
-  './js/supabase-config.js?v=20260910c',
-  './js/sync.js?v=20260910c',
+  './js/supabase-config.js?v=20260910e',
+  './js/sync.js?v=20260910e',
   './icons/icon.svg'
 ];
 
