@@ -1,22 +1,22 @@
 /* 天天滚动 · Service Worker（PWA 离线缓存 + 版本更新提示） */
-const CACHE = 'ttgd-v4';
+const CACHE = 'ttgd-v5';
 const IMG_CACHE = 'ttgd-img-v3';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  './css/style.css',
-  './js/storage.js',
-  './js/scheduler.js',
-  './js/anki.js',
-  './js/data.js',
-  './js/bundled_questions.js',
-  './js/bundled_imagecards.js',
-  './js/plan-data.js',
-  './js/app.js',
+  './css/style.css?v=20260910b',
+  './js/storage.js?v=20260910b',
+  './js/scheduler.js?v=20260910b',
+  './js/anki.js?v=20260910b',
+  './js/data.js?v=20260910b',
+  './js/bundled_questions.js?v=20260910b',
+  './js/bundled_imagecards.js?v=20260910b',
+  './js/plan-data.js?v=20260910b',
+  './js/app.js?v=20260910b',
   './js/vendor/supabase.min.js',
-  './js/supabase-config.js',
-  './js/sync.js',
+  './js/supabase-config.js?v=20260910b',
+  './js/sync.js?v=20260910b',
   './icons/icon.svg'
 ];
 
