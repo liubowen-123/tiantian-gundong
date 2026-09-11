@@ -63,22 +63,31 @@
         }
       }
       if (!latest) return;
-      if (typeof TTStore === 'undefined' || !TTStore.getExam) return;
-      var exam = TTStore.getExam() || [];
-      var dup = exam.some(function (e) {
-        return e.date === latest.date && e.score === latest.score && e.correct === latest.correct;
-      });
-      if (dup) return;
+      if (typeof TTStore === 'undefined' || !TTStore.getExam || !TTStore.saveExam) return;
       var d = new Date();
       var dateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-      TTStore.addExam({
-        score: latest.score,
-        correct: latest.correct,
-        total: latest.total,
-        seconds: latest.seconds,
-        date: dateStr,
-        pct: latest.score
+      var rec = {
+        score: latest.score, correct: latest.correct, total: latest.total,
+        seconds: latest.seconds, date: dateStr, pct: latest.score, ts: latest.date
+      };
+      // 先去重再合并：同一 ts（或同日同分同秒）只保留一条，避免重复记录
+      var exam = TTStore.getExam() || [];
+      var keyed = {};
+      var clean = [];
+      exam.forEach(function (e) {
+        var k = e.ts || (e.date + '|' + e.score + '|' + e.correct + '|' + e.seconds);
+        if (!keyed[k]) { keyed[k] = 1; clean.push(e); }
       });
+      var nk = rec.ts || (rec.date + '|' + rec.score + '|' + rec.correct + '|' + rec.seconds);
+      if (!keyed[nk]) { clean.unshift(rec); }
+      else {
+        // 已存在则原地更新为最新字段（含 ts）
+        for (var m = 0; m < clean.length; m++) {
+          var k2 = clean[m].ts || (clean[m].date + '|' + clean[m].score + '|' + clean[m].correct + '|' + clean[m].seconds);
+          if (k2 === nk) { clean[m] = rec; break; }
+        }
+      }
+      TTStore.saveExam(clean.slice(0, 20));
     } catch (e) { /* 记录同步失败不阻断考试 */ }
   }
 
