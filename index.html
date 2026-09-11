@@ -30,7 +30,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon.svg">
-<link rel="stylesheet" href="css/style.css?v=20260910e">
+<link rel="stylesheet" href="css/style.css?v=20260910f">
 <!-- 学习计划 · 放大可读性覆盖层（2026-09-10：放大每日任务字号、加大间距，防止内容被遮挡） -->
 <style>
 .plan-task-list { gap: 12px; margin-top: 14px; max-height: 62vh; padding: 4px; }
@@ -54,6 +54,30 @@
   .plan-task { padding: 18px 19px; }
   .plan-task-list { max-height: 60vh; }
 }
+/* 整卷考试 · 错题增强覆盖层（2026-09-11：逐选项解析 + AI 逐选项 + 对应导图片段） */
+.res-opts { display: flex; flex-direction: column; gap: 6px; margin: 9px 0 4px; }
+.res-opt { display: flex; align-items: flex-start; gap: 9px; padding: 8px 11px; border-radius: 9px;
+  background: #f7f9f8; border: 1px solid #e8efeb; font-size: 14px; line-height: 1.6; color: #33413a; }
+.res-opt.res-opt-ok { background: #e9f8ef; border-color: #b8e6cc; }
+.res-opt.res-opt-bad { background: #fdeeee; border-color: #f3c6c6; }
+.res-opt-key { flex: 0 0 auto; width: 21px; height: 21px; margin-top: 1px; border-radius: 50%;
+  background: #fff; border: 1px solid #cfd9d3; color: #33413a; font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; }
+.res-opt.res-opt-ok .res-opt-key { background: #1f7a58; border-color: #1f7a58; color: #fff; }
+.res-opt.res-opt-bad .res-opt-key { background: #d9534f; border-color: #d9534f; color: #fff; }
+.res-opt-text { flex: 1; word-break: break-word; }
+.res-opt-tag { flex: 0 0 auto; font-size: 12px; font-weight: 700; margin-top: 2px; color: #1f7a58; }
+.res-opt.res-opt-bad .res-opt-tag { color: #d9534f; }
+.res-ai-zone { margin: 6px 0 2px; }
+.res-ai-btn { margin-top: 6px; }
+.res-wrong-ex { white-space: pre-wrap; }
+.tt-zoom-ov { position: fixed; inset: 0; z-index: 300; background: rgba(10, 20, 15, 0.86);
+  display: flex; align-items: center; justify-content: center; padding: 18px; }
+.tt-zoom-box { position: relative; background: #fff; border-radius: 12px; padding: 8px;
+  max-width: 96vw; max-height: 92vh; overflow: auto; }
+.tt-zoom-box img { display: block; border-radius: 8px; height: auto; }
+.tt-zoom-close { position: absolute; top: 6px; right: 6px; width: 32px; height: 32px; border-radius: 50%;
+  border: none; background: rgba(0,0,0,.55); color: #fff; font-size: 15px; cursor: pointer; }
 </style>
 
 </head>
@@ -453,20 +477,21 @@
   <div class="modal-mask hidden" id="modal-mask"></div>
 </div>
 
-<script src="js/storage.js?v=20260910e" defer></script>
-<script src="js/scheduler.js?v=20260910e" defer></script>
-<script src="js/anki.js?v=20260910e" defer></script>
-<script src="js/data.js?v=20260910e" defer></script>
-<script src="js/bundled_imagecards.js?v=20260910e" defer></script>
-<script src="js/bundled_questions.js?v=20260910e" defer></script>
-<script src="js/paper_data.js?v=20260910e" defer></script>
-<script src="js/img_ocr_index.js?v=20260910e" defer></script>
-<script src="js/plan-data.js?v=20260910e" defer></script>
-<script src="js/app.js?v=20260910e" defer></script>
-<script src="js/vendor/supabase.min.js?v=20260910e" defer></script>
-<script src="js/supabase-config.js?v=20260910e" defer></script>
-<script src="js/sync.js?v=20260910e" defer></script>
-<script src="js/ai.js?v=20260910e" defer></script>
+<script src="js/storage.js?v=20260910f" defer></script>
+<script src="js/scheduler.js?v=20260910f" defer></script>
+<script src="js/anki.js?v=20260910f" defer></script>
+<script src="js/data.js?v=20260910f" defer></script>
+<script src="js/bundled_imagecards.js?v=20260910f" defer></script>
+<script src="js/bundled_questions.js?v=20260910f" defer></script>
+<script src="js/paper_data.js?v=20260910f" defer></script>
+<script src="js/img_ocr_index.js?v=20260910f" defer></script>
+<script src="js/plan-data.js?v=20260910f" defer></script>
+<script src="js/app.js?v=20260910f" defer></script>
+<script src="js/vendor/supabase.min.js?v=20260910f" defer></script>
+<script src="js/supabase-config.js?v=20260910f" defer></script>
+<script src="js/sync.js?v=20260910f" defer></script>
+<script src="js/ai.js?v=20260910f" defer></script>
+<script src="js/exam-fix.js?v=20260910f" defer></script>
 <script>
 // PWA：注册 Service Worker（离线缓存 + 可安装）
 if ('serviceWorker' in navigator) {
