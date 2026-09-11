@@ -1,7 +1,7 @@
 /* ============================================================
    天天滚动 · 整卷考试增强层（独立补丁 js/exam-fix.js）
    1. 交卷后把成绩同步写入「考试记录」(ttgd.exam.v1)，修复考试无记录
-   2. 错题回顾：逐选项列表 + 🤖 AI 逐选项解析 + 📎 对应导图片段
+   2. 错题回顾：逐选项列表 + 🤖 AI 逐选项解析 + 📎 对应导图片段（内嵌展开完整导图）
    纯 DOM/存储层补丁，不改 app.js；由 index.html 在 app.js 之后加载。
    ============================================================ */
 (function () {
@@ -271,21 +271,27 @@
     return { card: best.cand.card, x: x0, y: y0, w: cw, h: chh, iw: iw, ih: ih,
       text: best.b[4], sc: best.sc, sameCh: sameCh.length > 0 };
   }
-  function openZoomViewer(card) {
-    try {
-      var img = new Image();
-      img.onload = function () {
-        var w = Math.min(1200, img.width || 1200);
-        var h = Math.round((img.height || 800) * w / (img.width || 1200));
-        var ov = document.createElement('div');
-        ov.className = 'tt-zoom-ov';
-        ov.innerHTML = '<div class="tt-zoom-box"><img src="' + esc(card.image) + '" style="max-width:92vw;width:' + w + 'px" alt="导图全图"><button class="tt-zoom-close">✕</button></div>';
-        document.body.appendChild(ov);
-        ov.querySelector('.tt-zoom-close').onclick = function () { ov.remove(); };
-        ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); });
-      };
-      img.src = card.image;
-    } catch (e) { /* ignore */ }
+  /* ---- 导图内嵌展开：点击后在页面内展开完整导图（可一直下拉查看全部） ---- */
+  function toggleImgFull(wrap) {
+    var full = wrap.querySelector('.img-snippet-full');
+    var lab = wrap.querySelector('.img-snippet-label');
+    if (!full) return;
+    if (full.classList.contains('open')) {
+      full.classList.remove('open');
+      if (lab) lab.textContent = '📎 对应导图片段 · 点击展开完整导图';
+      return;
+    }
+    full.classList.add('open');
+    if (lab) lab.textContent = '📎 对应导图片段 · 点击收起';
+    var img = full.querySelector('img');
+    if (img && img.getAttribute('data-src') && !img.src) {
+      img.src = img.getAttribute('data-src');
+      img.removeAttribute('data-src');
+    }
+    // 展开后把页面滚动到导图顶部，方便一直往下拉看完整内容
+    setTimeout(function () {
+      try { full.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* ignore */ }
+    }, 60);
   }
   function bindImgSnippet(it, host) {
     try {
@@ -297,12 +303,22 @@
       var lPct = (-100 * sn.x / sn.w).toFixed(2), tPct = (-100 * sn.y / sn.h).toFixed(2);
       var ratio = (sn.w * sn.iw) / (sn.h * sn.ih);
       wrap.innerHTML =
-        '<div class="img-snippet-label">📎 对应导图片段 · 点击看全图</div>' +
+        '<div class="img-snippet-label">📎 对应导图片段 · 点击展开完整导图</div>' +
         '<div class="img-snippet-viewport" style="aspect-ratio:' + ratio.toFixed(3) + '">' +
         '<img src="' + esc(ossThumb(sn.card.image, 1400, 85)) + '" alt="导图片段" loading="lazy" style="width:' + iwPct + '%;height:' + ihPct + '%;left:' + lPct + '%;top:' + tPct + '%">' +
         '</div>' +
-        '<div class="img-snippet-foot">' + esc(cleanChapter(sn.card.chapter || '')) + ' 导图' + (sn.sameCh ? '' : '（跨科目匹配）') + '</div>';
-      wrap.querySelector('.img-snippet-viewport').addEventListener('click', function () { openZoomViewer(sn.card); });
+        '<div class="img-snippet-foot">' + esc(cleanChapter(sn.card.chapter || '')) + ' 导图' + (sn.sameCh ? '' : '（跨科目匹配）') + '</div>' +
+        '<div class="img-snippet-full">' +
+        '<div class="img-snippet-full-head"><span>📖 完整导图 · 可向下滑动查看全部</span><button type="button">收起</button></div>' +
+        '<img alt="完整导图" loading="lazy" data-src="' + esc(ossThumb(sn.card.image, 1600, 88)) + '">' +
+        '</div>';
+      var open = function () { toggleImgFull(wrap); };
+      var vp = wrap.querySelector('.img-snippet-viewport');
+      if (vp) vp.addEventListener('click', open);
+      var lab = wrap.querySelector('.img-snippet-label');
+      if (lab) lab.addEventListener('click', open);
+      var btn = wrap.querySelector('.img-snippet-full-head button');
+      if (btn) btn.addEventListener('click', open);
       host.appendChild(wrap);
     } catch (e) { /* 片段是增强功能，失败不影响回顾 */ }
   }

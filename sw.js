@@ -1,23 +1,23 @@
 /* 天天滚动 · Service Worker（PWA 离线缓存 + 版本更新提示） */
-const CACHE = 'ttgd-v10';
+const CACHE = 'ttgd-v11';
 const IMG_CACHE = 'ttgd-img-v3';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  './css/style.css?v=20260910g',
-  './js/storage.js?v=20260910g',
-  './js/scheduler.js?v=20260910g',
-  './js/anki.js?v=20260910g',
-  './js/data.js?v=20260910g',
-  './js/bundled_questions.js?v=20260910g',
-  './js/bundled_imagecards.js?v=20260910g',
-  './js/plan-data.js?v=20260910g',
-  './js/app.js?v=20260910g',
+  './css/style.css?v=20260911a',
+  './js/storage.js?v=20260911a',
+  './js/scheduler.js?v=20260911a',
+  './js/anki.js?v=20260911a',
+  './js/data.js?v=20260911a',
+  './js/bundled_questions.js?v=20260911a',
+  './js/bundled_imagecards.js?v=20260911a',
+  './js/plan-data.js?v=20260911a',
+  './js/app.js?v=20260911a',
   './js/vendor/supabase.min.js',
-  './js/supabase-config.js?v=20260910g',
-  './js/sync.js?v=20260910g',
-  './js/exam-fix.js?v=20260910g',
+  './js/supabase-config.js?v=20260911a',
+  './js/sync.js?v=20260911a',
+  './js/exam-fix.js?v=20260911a',
   './icons/icon.svg'
 ];
 
