@@ -1078,6 +1078,113 @@
     }
   }
 
+  /* ---------- 长按排除选项 + 草稿纸（做题工具） ---------- */
+  // 长按手势：按住选项 450ms 触发 onToggle(optEl, idx)；移动超阈值取消；并拦截长按后误触发的 click
+  function attachExcludeGesture(listEl, onToggle) {
+    if (!listEl || listEl.__excludeBound) return;
+    listEl.__excludeBound = true;
+    var pressTimer = null, sx = 0, sy = 0, lastFire = { t: 0, i: -1 };
+    function clearTimer() { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } }
+    listEl.addEventListener('pointerdown', function (e) {
+      var opt = e.target.closest('.option');
+      if (!opt || opt.classList.contains('disabled') || opt.classList.contains('correct') || opt.classList.contains('wrong')) return;
+      sx = e.clientX; sy = e.clientY;
+      clearTimer();
+      pressTimer = setTimeout(function () {
+        var idx = parseInt(opt.dataset.i, 10);
+        lastFire = { t: Date.now(), i: idx };
+        try { if (navigator.vibrate) navigator.vibrate(18); } catch (ev) {}
+        onToggle(opt, idx);
+        showExcludeTip(opt.classList.contains('excluded'));
+      }, 450);
+    });
+    listEl.addEventListener('pointermove', function (e) {
+      if (pressTimer && (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10)) clearTimer();
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) {
+      listEl.addEventListener(ev, clearTimer);
+    });
+    // 捕获阶段拦截“长按松手”合成的 click，避免排除时误选答案
+    listEl.addEventListener('click', function (e) {
+      var opt = e.target.closest('.option');
+      if (opt && Date.now() - lastFire.t < 450 && parseInt(opt.dataset.i, 10) === lastFire.i) {
+        e.stopPropagation(); e.preventDefault(); lastFire.t = 0;
+      }
+    }, true);
+  }
+  var _excludeTipEl = null, _excludeTipTimer = null;
+  function showExcludeTip(excludedNow) {
+    if (!_excludeTipEl) {
+      _excludeTipEl = document.createElement('div');
+      _excludeTipEl.className = 'exclude-tip';
+      document.body.appendChild(_excludeTipEl);
+    }
+    _excludeTipEl.textContent = excludedNow ? '已排除该选项（再长按可恢复）' : '已恢复该选项';
+    _excludeTipEl.classList.add('show');
+    clearTimeout(_excludeTipTimer);
+    _excludeTipTimer = setTimeout(function () { _excludeTipEl && _excludeTipEl.classList.remove('show'); }, 1200);
+  }
+
+  // 草稿纸：按题目稳定标识持久化到 localStorage，单例弹层
+  var DRAFT_KEY = 'ttgd.draft.v1', draftPanel = null, draftCurId = null, draftTa = null;
+  function _strHash(s) { var h = 0; s = String(s || ''); for (var i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; } return 'h' + (h >>> 0).toString(36); }
+  // 题目稳定唯一键：入库题用 id；整卷原始题用 试卷+题号；都没有则用 科目+题干 哈希
+  function draftKeyOf(it) {
+    if (!it) return 'unknown';
+    if (it.id) return 'id:' + it.id;
+    if (it.qnum != null) return 'pn:' + (it.exam || it.subject || 'paper') + ':' + it.qnum;
+    return 'q:' + _strHash((it.subject || '') + '|' + (it.question || ''));
+  }
+  function loadDrafts() { try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}'); } catch (e) { return {}; } }
+  function saveDrafts(d) { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch (e) {} }
+  function draftHas(id) { var t = loadDrafts()[id]; return !!(t && String(t).trim()); }
+  function markDraftBtn(id) {
+    document.querySelectorAll('.draft-btn').forEach(function (b) {
+      if (b.getAttribute('data-draft') === String(id)) b.classList.toggle('has-draft', draftHas(id));
+    });
+  }
+  function closeDraft() { if (draftPanel) draftPanel.style.display = 'none'; }
+  function openDraft(id) {
+    draftCurId = id;
+    if (!draftPanel) {
+      draftPanel = document.createElement('div');
+      draftPanel.className = 'draft-mask';
+      draftPanel.innerHTML =
+        '<div class="draft-panel" role="dialog" aria-label="草稿纸">' +
+        '  <div class="draft-head"><span class="draft-title">📝 草稿纸</span><button class="draft-close" aria-label="关闭">×</button></div>' +
+        '  <textarea class="draft-textarea" placeholder="在这里打草稿、记思路、做简单计算…（自动按本题保存，切换题目会保留）"></textarea>' +
+        '  <div class="draft-foot"><span class="spacer">自动保存</span><button class="draft-clear">清空本草稿</button><button class="draft-done">完成</button></div>' +
+        '</div>';
+      document.body.appendChild(draftPanel);
+      draftTa = draftPanel.querySelector('.draft-textarea');
+      draftTa.addEventListener('input', function () {
+        var d = loadDrafts(); if (draftTa.value) d[draftCurId] = draftTa.value; else delete d[draftCurId];
+        saveDrafts(d);
+      });
+      draftPanel.querySelector('.draft-done').addEventListener('click', function () {
+        markDraftBtn(draftCurId); closeDraft();
+      });
+      draftPanel.querySelector('.draft-close').addEventListener('click', function () {
+        markDraftBtn(draftCurId); closeDraft();
+      });
+      draftPanel.querySelector('.draft-clear').addEventListener('click', function () {
+        draftTa.value = '';
+        var d = loadDrafts(); delete d[draftCurId]; saveDrafts(d);
+        markDraftBtn(draftCurId); draftTa.focus();
+      });
+      draftPanel.addEventListener('click', function (e) { if (e.target === draftPanel) { markDraftBtn(draftCurId); closeDraft(); } });
+    }
+    draftTa.value = loadDrafts()[id] || '';
+    draftPanel.style.display = 'flex';
+    setTimeout(function () { draftTa.focus(); }, 60);
+  }
+  function bindDraftBtn(scope, id) {
+    (scope || document).querySelectorAll('.draft-btn').forEach(function (b) {
+      if (b.__bound) return; b.__bound = true;
+      b.addEventListener('click', function () { openDraft(b.dataset.draft || id); });
+    });
+  }
+
   /* ---------- 选择题（刷题） ---------- */
   function renderQuiz(it) {
     const letters = ['A', 'B', 'C', 'D', 'E'];
@@ -1097,8 +1204,9 @@
           <span class="tag sub" data-subject="${esc(it.subject)}">${esc(it.subject)}</span>
           ${typeTag}${srcTag}${multiTag}
           ${it.reviewCount > 0 ? `<span class="tag sub">已复习 ${it.reviewCount} 次</span>` : ''}
+          <span class="learn-tools"><button class="draft-btn ${draftHas(draftKeyOf(it)) ? 'has-draft' : ''}" data-draft="${esc(draftKeyOf(it))}">📝 草稿</button></span>
         </div>
-        <div class="learn-question">${esc(it.question)}${isMulti(it.answer) ? '<div class="multi-hint">（多选 · 可点选多项后再提交）</div>' : ''}</div>
+        <div class="learn-question">${esc(it.question)}${isMulti(it.answer) ? '<div class="multi-hint">（多选 · 可点选多项后再提交）</div>' : ''}<div class="multi-hint">小技巧：长按选项可排除/恢复，右上角「草稿」可打草稿</div></div>
         <div class="option-list" id="opt-list">${opts}</div>
         <div id="quiz-feedback"></div>
       </div>
@@ -1115,6 +1223,7 @@
     // ---------- 多选（answer 为数组） ----------
     if (isMulti(it.answer)) {
       let chosen = [];
+      const excluded = new Set();
       const renderSubmit = () => {
         actions.innerHTML = `<button class="btn-primary" id="btn-multi-submit" ${chosen.length ? '' : 'disabled'}>提交答案</button>`;
         $('#btn-multi-submit').addEventListener('click', () => {
@@ -1146,24 +1255,38 @@
         const opt = e.target.closest('.option');
         if (!opt) return;
         const i = parseInt(opt.dataset.i, 10);
+        if (excluded.has(i)) return; // 已排除项不可点选
         const k = chosen.indexOf(i);
         if (k >= 0) chosen.splice(k, 1); else chosen.push(i);
         opt.classList.toggle('selected', chosen.indexOf(i) >= 0);
         renderSubmit();
       });
+      // 长按排除/恢复
+      attachExcludeGesture(optList, (opt, i) => {
+        if (excluded.has(i)) { excluded.delete(i); opt.classList.remove('excluded'); }
+        else {
+          excluded.add(i); opt.classList.add('excluded'); opt.classList.remove('selected');
+          const k = chosen.indexOf(i); if (k >= 0) chosen.splice(k, 1);
+          renderSubmit();
+        }
+      });
+      bindDraftBtn(null, draftKeyOf(it));
       renderSubmit();
       return;
     }
 
     // ---------- 单选 ----------
+    const excluded = new Set();
     optList.addEventListener('click', function handler(e) {
       if (answered) return;
       const opt = e.target.closest('.option');
       if (!opt) return;
+      const chosenIdx = parseInt(opt.dataset.i, 10);
+      if (excluded.has(chosenIdx)) return; // 已排除项不可点选
       answered = true;
       App.learnBusy = true;
 
-      const chosen = parseInt(opt.dataset.i, 10);
+      const chosen = chosenIdx;
       const correct = chosen === it.answer;
 
       $$('.option').forEach((o, i) => {
@@ -1188,6 +1311,12 @@
         <button class="btn-primary" id="btn-next">${App.learnIndex + 1 >= App.learnQueue.length ? '完成' : '下一题'}</button>`;
       $('#btn-next').addEventListener('click', () => { App.learnIndex++; App.learnBusy = false; saveLearnSession(); renderLearn(); });
     });
+    // 长按排除/恢复
+    attachExcludeGesture(optList, (opt, i) => {
+      if (excluded.has(i)) { excluded.delete(i); opt.classList.remove('excluded'); }
+      else { excluded.add(i); opt.classList.add('excluded'); opt.classList.remove('selected'); }
+    });
+    bindDraftBtn(null, draftKeyOf(it));
   }
 
   /* ---------- 记忆卡（Anki） ---------- */
@@ -1569,15 +1698,17 @@
     renderExamTimer(examRemainMs());
     const letters = ['A', 'B', 'C', 'D', 'E'];
     const multi = isMulti(item.answer);
+    if (!ex.excluded) ex.excluded = [];
+    const exSetArr = ex.excluded[ex.index] || [];
     const opts = item.options.map((o, i) => `
-      <div class="option ${ansHas(ex.answers[ex.index], i) ? 'selected' : ''}" data-i="${i}">
+      <div class="option ${ansHas(ex.answers[ex.index], i) ? 'selected' : ''} ${exSetArr.indexOf(i) >= 0 ? 'excluded' : ''}" data-i="${i}">
         <span class="opt-key">${letters[i]}</span><span>${esc(o)}</span>
       </div>`).join('');
     $('#learn-body').innerHTML = `
       <div class="learn-card exam-card">
-        <div class="learn-meta"><span class="tag sub">${esc(item.subject)}</span><span class="tag">整卷考试</span>${multi ? '<span class="tag sub">多选</span>' : ''}</div>
-        <div class="learn-question">${esc(item.question)}${multi ? '<div class="multi-hint">（多选 · 可点选多项）</div>' : ''}</div>
-        <div class="option-list">${opts}</div>
+        <div class="learn-meta"><span class="tag sub">${esc(item.subject)}</span><span class="tag">整卷考试</span>${multi ? '<span class="tag sub">多选</span>' : ''}<span class="learn-tools"><button class="draft-btn ${draftHas(draftKeyOf(item)) ? 'has-draft' : ''}" data-draft="${esc(draftKeyOf(item))}">📝 草稿</button></span></div>
+        <div class="learn-question">${esc(item.question)}${multi ? '<div class="multi-hint">（多选 · 可点选多项；长按选项可排除）</div>' : '<div class="multi-hint">（长按选项可排除）</div>'}</div>
+        <div class="option-list" id="exam-opt-list">${opts}</div>
       </div>
       <div class="exam-nav">
         <button class="btn-ghost" id="exam-prev" ${ex.index === 0 ? 'disabled' : ''}>上一题</button>
@@ -1589,12 +1720,30 @@
     $('#exam-prev').addEventListener('click', () => { ex.index--; renderExam(); });
     if ($('#exam-next')) $('#exam-next').addEventListener('click', () => { ex.index++; renderExam(); });
     if ($('#exam-submit')) $('#exam-submit').addEventListener('click', submitExam);
+    const examOptList = $('#exam-opt-list');
     $$('#learn-body .option').forEach(o => {
       o.addEventListener('click', () => {
-        ex.answers[ex.index] = ansSet(ex.answers[ex.index], parseInt(o.dataset.i, 10), multi);
+        const oi = parseInt(o.dataset.i, 10);
+        if ((ex.excluded[ex.index] || []).indexOf(oi) >= 0) return; // 已排除不可选
+        ex.answers[ex.index] = ansSet(ex.answers[ex.index], oi, multi);
         renderExam();
       });
     });
+    // 长按排除/恢复（状态保留在 ex.excluded，上下题切换后仍在）
+    attachExcludeGesture(examOptList, (opt, oi) => {
+      let arr = ex.excluded[ex.index] || [];
+      const k = arr.indexOf(oi);
+      if (k >= 0) { arr.splice(k, 1); opt.classList.remove('excluded'); }
+      else {
+        arr.push(oi); opt.classList.add('excluded'); opt.classList.remove('selected');
+        // 若排除的是已选答案，同步取消选择
+        if (multi && Array.isArray(ex.answers[ex.index])) {
+          ex.answers[ex.index] = ex.answers[ex.index].filter(v => v !== oi);
+        } else if (ex.answers[ex.index] === oi) { ex.answers[ex.index] = null; }
+      }
+      ex.excluded[ex.index] = arr;
+    });
+    bindDraftBtn(null, draftKeyOf(item));
   }
 
   function submitExam() {

@@ -238,6 +238,80 @@ html, body {
 .option.wrong .opt-key { border-color: var(--danger); background: var(--danger); color: #fff; }
 .option.disabled { pointer-events: none; }
 
+/* 长按排除选项 */
+.option.excluded {
+  opacity: .5;
+  background: #f3f4f6;
+  border-style: dashed;
+  border-color: #d1d5db;
+  position: relative;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.option.excluded > span:not(.opt-key) { text-decoration: line-through; color: var(--text-3, #9ca3af); }
+.option.excluded .opt-key { background: #d1d5db; border-color: #d1d5db; color: #fff; position: relative; }
+.option.excluded .opt-key::after { content: "×"; font-size: 13px; font-weight: 700; }
+.option.excluded .opt-key { font-size: 0; }
+.option.excluded .opt-key::after { font-size: 13px; }
+.exclude-tip {
+  position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
+  background: rgba(17,24,39,.9); color: #fff; font-size: 12.5px; padding: 7px 14px;
+  border-radius: 999px; z-index: 9998; pointer-events: none; opacity: 0; transition: opacity .18s;
+}
+.exclude-tip.show { opacity: 1; }
+
+/* 做题工具按钮（草稿纸入口） */
+.learn-tools { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.draft-btn {
+  border: 1.5px solid var(--border); background: #fff; color: var(--text-2);
+  font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 999px;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 4px; position: relative;
+  transition: all .15s;
+}
+.draft-btn:active { transform: scale(.96); }
+.draft-btn.has-draft { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+.draft-btn.has-draft::after {
+  content: ""; position: absolute; top: -2px; right: -2px; width: 8px; height: 8px;
+  border-radius: 50%; background: #f59e0b; border: 1.5px solid #fff;
+}
+
+/* 草稿纸弹层 */
+.draft-mask {
+  position: fixed; inset: 0; background: rgba(17,24,39,.42); z-index: 9997;
+  display: flex; align-items: flex-end; justify-content: center;
+  animation: draftFade .18s ease;
+}
+@keyframes draftFade { from { opacity: 0; } to { opacity: 1; } }
+.draft-panel {
+  width: 100%; max-width: 640px; background: var(--card, #fff);
+  border-radius: 18px 18px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -8px 30px rgba(0,0,0,.18); display: flex; flex-direction: column; gap: 12px;
+  max-height: 78vh; animation: draftUp .22s ease;
+}
+@keyframes draftUp { from { transform: translateY(24px); opacity: .6; } to { transform: translateY(0); opacity: 1; } }
+@media (min-width: 720px) {
+  .draft-mask { align-items: center; }
+  .draft-panel { border-radius: 18px; max-height: 70vh; margin: 24px; }
+}
+.draft-head { display: flex; align-items: center; justify-content: space-between; }
+.draft-title { font-size: 15px; font-weight: 700; color: var(--text, #111827); }
+.draft-close { border: none; background: #f3f4f6; color: var(--text-2); width: 30px; height: 30px; border-radius: 50%; font-size: 16px; cursor: pointer; line-height: 1; }
+.draft-textarea {
+  width: 100%; min-height: 220px; flex: 1; box-sizing: border-box; resize: vertical;
+  border: 1.5px solid var(--border); border-radius: 12px; padding: 12px 14px;
+  font-size: 15px; line-height: 1.7; font-family: inherit; color: var(--text, #111827);
+  background: var(--card, #fff); outline: none;
+}
+.draft-textarea:focus { border-color: var(--primary); }
+.draft-foot { display: flex; gap: 10px; align-items: center; }
+.draft-foot .spacer { flex: 1; font-size: 12px; color: var(--text-3, #9ca3af); }
+.draft-clear { border: 1.5px solid var(--danger); color: var(--danger); background: #fff; border-radius: 10px; padding: 9px 18px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.draft-done { border: none; background: var(--primary); color: #fff; border-radius: 10px; padding: 9px 22px; font-size: 14px; font-weight: 600; cursor: pointer; }
+html.dark .draft-btn { background: var(--card); }
+html.dark .option.excluded { background: #20242b; border-color: #3a4150; }
+html.dark .draft-close { background: #2a2f38; }
+
 /* 记忆卡 */
 .flashcard {
   perspective: 1000px;
