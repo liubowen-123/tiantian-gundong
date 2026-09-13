@@ -205,72 +205,13 @@
     });
   }
 
-  /* ---- 对应导图片段（OCR 索引匹配；科目不在导图集合时全库匹配） ---- */
-  function _snGrams(src) {
-    var s2 = String(src || '').replace(/[\s，。、（）()：:；;,.!?！？·①-⑩\[\]【】“”‘’\-—_]/g, '');
-    var g = {};
-    for (var i = 0; i < s2.length - 1; i++) g[s2.substr(i, 2)] = 1;
-    for (var j = 0; j < s2.length; j++) g[s2[j]] = 1;
-    return g;
-  }
-  function _snBlockScore(qg, t) {
-    var bg = _snGrams(t);
-    var inter = 0;
-    Object.keys(bg).forEach(function (k) { if (qg[k]) inter++; });
-    var t2 = String(t || '').replace(/[\s，。、（）()：:；;,.!?！？·\[\]【】“”‘’\-—_]/g, '');
-    var longHit = 0;
-    for (var i = 0; i < t2.length - 2; i++) {
-      var g3 = t2.substr(i, 3), ok = true;
-      for (var a = 0; a < 2; a++) if (!qg[g3.substr(a, 2)]) { ok = false; break; }
-      if (ok) longHit++;
-    }
-    var lenPen = t2.length > 38 ? 0.7 : 1;
-    return (inter + longHit * 1.5) * lenPen;
-  }
+  /* ---- 对应导图片段（精准匹配引擎 match-engine.js；整卷自动定科） ---- */
   function findImgSnippet(it) {
-    var IDX = window.TTImgOcrIndex, CARDS = window.TTBundledImageCards;
-    if (!IDX || !CARDS || !it) return null;
-    var ch = cleanChapter(it.chapter || '');
-    var subjSet = {};
-    for (var s = 0; s < CARDS.length; s++) subjSet[CARDS[s].subject] = 1;
-    var restrict = !!subjSet[it.subject];
-    var sameCh = [], sameSubj = [];
-    for (var i = 0; i < CARDS.length; i++) {
-      var card = CARDS[i];
-      if (restrict && card.subject !== it.subject) continue;
-      var key = String(card.image).split('/').pop();
-      var ent = IDX[key];
-      if (!ent || !ent.b || !ent.b.length) continue;
-      if (cleanChapter(card.chapter || '') === ch) sameCh.push({ card: card, ent: ent });
-      else sameSubj.push({ card: card, ent: ent });
-    }
-    var cands = sameCh.length ? sameCh : sameSubj;
-    if (!cands.length) return null;
-    var qText = it.question + ' ' + (it.options || []).join(' ') + ' ' + (it.explain || '');
-    var qg = _snGrams(qText);
-    var best = null;
-    cands.forEach(function (cand) {
-      cand.ent.b.forEach(function (b) {
-        var sc = _snBlockScore(qg, b[4]);
-        if (!best || sc > best.sc) best = { sc: sc, cand: cand, b: b };
-      });
-    });
-    if (!best || best.sc < 4.5) return null;
-    var bx = best.b[0], by = best.b[1], bw = best.b[2], bh = best.b[3];
-    var y0 = Math.max(0, by - bh * 0.5), y1 = Math.min(1, by + bh * 2.6);
-    var x0 = Math.max(0, bx - 0.012), x1 = Math.min(1, bx + bw + 0.012);
-    best.cand.ent.b.forEach(function (b) {
-      var cy = b[1] + b[3] / 2;
-      if (cy >= y0 && cy <= y1) {
-        x0 = Math.min(x0, Math.max(0, b[0] - 0.008));
-        x1 = Math.max(x1, Math.min(1, b[0] + b[2] + 0.008));
-      }
-    });
-    var ent = best.cand.ent;
-    var iw = ent.W || 2416, ih = ent.H || 1313;
-    var cw = Math.min(1, x1 - x0), chh = y1 - y0;
-    return { card: best.cand.card, x: x0, y: y0, w: cw, h: chh, iw: iw, ih: ih,
-      text: best.b[4], sc: best.sc, sameCh: sameCh.length > 0 };
+    try {
+      if (!window.TTMatchEngine) return null;
+      if (!window.TTMatchEngine.ready) window.TTMatchEngine.build();
+      return window.TTMatchEngine.match(it);
+    } catch (e) { return null; }
   }
   /* ---- 导图默认完整显示：页面内直接展开整张导图（可一直下拉查看全部） ---- */
   function setSnippetFullOpen(wrap, open) {
