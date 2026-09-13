@@ -3711,23 +3711,46 @@
   }
 
   /* ================= Service Worker 更新监听 ================= */
+  function _swInExam() {
+    try { return document.body && document.body.innerText.indexOf('交卷') >= 0; } catch (e) { return false; }
+  }
+  function _swAutoReload(reason) {
+    try {
+      // 整卷考试进行中不自动刷新，避免丢失答题进度（改由横幅提示）
+      if (_swInExam()) return false;
+      // 每个会话最多自动刷新一次，杜绝刷新循环
+      if (sessionStorage.getItem('tt_sw_autoreloaded')) return false;
+      sessionStorage.setItem('tt_sw_autoreloaded', '1');
+      window.location.reload();
+      return true;
+    } catch (e) { return false; }
+  }
   function setupSWUpdateListener() {
     if (!('serviceWorker' in navigator)) return;
+
+    // 新 SW 接管客户端后：非考试场景自动静默刷新一次，平板/手机无需手动清缓存
+    var reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (reloaded) return; reloaded = true;
+      setTimeout(function () { _swAutoReload('controllerchange'); }, 600);
+    });
 
     // 监听 SW 发来的更新消息
     navigator.serviceWorker.addEventListener('message', function (e) {
       if (e.data && e.data.type === 'SW_UPDATED') {
-        // 有更新可用，提示用户刷新
+        // 非考试场景直接自动刷新；考试中才显示横幅，交卷后下次打开自动更新
+        if (_swAutoReload('sw_updated')) return;
         var banner = document.createElement('div');
         banner.style.cssText = 'position:fixed;bottom:80px;left:16px;right:16px;z-index:9999;background:#2f8f6b;color:#fff;border-radius:14px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 20px rgba(0,0,0,0.2);animation:fadeIn .3s ease';
-        banner.innerHTML = '<span style="font-size:14px;font-weight:600">🔄 新版本可用</span><button style="background:#fff;color:#2f8f6b;border:none;border-radius:8px;padding:6px 16px;font-size:14px;font-weight:600;cursor:pointer" id="sw-refresh-btn">刷新</button>';
+        banner.innerHTML = '<span style="font-size:14px;font-weight:600">🔄 新版本已就绪，交卷后请关闭重开</span><button style="background:#fff;color:#2f8f6b;border:none;border-radius:8px;padding:6px 16px;font-size:14px;font-weight:600;cursor:pointer" id="sw-refresh-btn">刷新</button>';
         document.body.appendChild(banner);
         document.getElementById('sw-refresh-btn').addEventListener('click', function () {
+          sessionStorage.removeItem('tt_sw_autoreloaded');
           banner.remove();
           window.location.reload();
         });
-        // 10 秒后自动消失
-        setTimeout(function () { if (banner.parentNode) banner.remove(); }, 10000);
+        // 考试中横幅常驻，不自动消失
+        if (!_swInExam()) setTimeout(function () { if (banner.parentNode) banner.remove(); }, 10000);
       }
     });
 
