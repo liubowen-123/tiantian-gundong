@@ -347,6 +347,11 @@
       if (scored[0].ds.sc >= T_SUBJ && scored[0].ds.ss >= SS_SUBJ && scored[0].ds.top.anchor >= ANCHOR &&
           (scored.length < 2 || scored[0].ds.ss >= scored[1].ds.ss * 1.4))
         return this._assemble(scored[0], scored[0].csim >= 0.45 ? 'ch' : 'subj');
+      // L3 宽松兜底（仅整卷 strict；题库已有章节、覆盖率足够，不启用以免引入噪声）：
+      // 已成功定科=主题科属明确，放宽分值/差距，但仍要求题目自身锚点（非纯套话）且不跨科
+      if (strict && scored[0].ds.sc >= 6.0 && scored[0].ds.ss >= 5.0 && scored[0].ds.top.anchor >= 2.3 &&
+          (scored.length < 2 || scored[0].ds.ss >= scored[1].ds.ss * 1.22))
+        return this._assemble(scored[0], scored[0].csim >= 0.45 ? 'ch' : 'subj');
       return null;
     },
 

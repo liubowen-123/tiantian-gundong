@@ -144,16 +144,66 @@
     box.appendChild(btn);
   }
 
-  /* ---------- 对应导图片段（精准匹配引擎 match-engine.js） ---------- */
-  function findImgSnippet(it) {
-    try {
-      if (!window.TTMatchEngine || !window.TTMatchEngine.ready) {
-        if (window.TTMatchEngine && !window.TTMatchEngine.ready) window.TTMatchEngine.build();
-      }
-      if (!window.TTMatchEngine) return null;
-      return window.TTMatchEngine.match(it);
-    } catch (e) { return null; }
+  /* ---------- 对应导图片段（精准匹配引擎 match-engine.js + 内置兜底，双重保险） ---------- */
+  // 兜底匹配：仅当外部引擎文件未加载/异常时启用（技术故障保底，避免一张图都没有）
+  function _fbGrams(src) {
+    var s2 = String(src || '').replace(/[\s，。、（）()：:；;,.!?！？·①-⑩\[\]【】“”‘’\-—_]/g, '');
+    var g = {};
+    for (var i = 0; i < s2.length - 1; i++) g[s2.substr(i, 2)] = 1;
+    for (var j = 0; j < s2.length; j++) g[s2[j]] = 1;
+    return g;
   }
+  function fallbackSnippet(it) {
+    var IDX = window.TTImgOcrIndex, CARDS = window.TTBundledImageCards;
+    if (!IDX || !CARDS || !it || !it.question) return null;
+    var ch = cleanChapter(it.chapter || ''), sameCh = [], sameSubj = [];
+    for (var i = 0; i < CARDS.length; i++) {
+      var card = CARDS[i];
+      if (it.subject && card.subject !== it.subject) continue;
+      var key = String(card.image).split('/').pop(), ent = IDX[key];
+      if (!ent || !ent.b || !ent.b.length) continue;
+      if (cleanChapter(card.chapter || '') === ch) sameCh.push({ card: card, ent: ent });
+      else sameSubj.push({ card: card, ent: ent });
+    }
+    var cands = sameCh.length ? sameCh : sameSubj;
+    if (!cands.length) return null;
+    var qg = _fbGrams(it.question + ' ' + (it.options || []).join(' ') + ' ' + (it.explain || ''));
+    var best = null;
+    cands.forEach(function (cand) {
+      cand.ent.b.forEach(function (b) {
+        var bg = _fbGrams(b[4]), inter = 0;
+        Object.keys(bg).forEach(function (k) { if (qg[k]) inter++; });
+        var t2 = String(b[4] || '').replace(/[\s，。、（）()：:；;,.!?！？·\[\]【】“”‘’\-—_]/g, ''), lh = 0;
+        for (var k = 0; k < t2.length - 2; k++) { var g3 = t2.substr(k, 3), ok = true;
+          for (var a = 0; a < 2; a++) if (!qg[g3.substr(a, 2)]) { ok = false; break; } if (ok) lh++; }
+        var sc = (inter + lh * 1.5) * (t2.length > 38 ? 0.7 : 1);
+        if (!best || sc > best.sc) best = { sc: sc, cand: cand, b: b };
+      });
+    });
+    if (!best || best.sc < 4.5) return null;
+    var bx = best.b[0], by = best.b[1], bw = best.b[2], bh = best.b[3];
+    var y0 = Math.max(0, by - bh * 0.5), y1 = Math.min(1, by + bh * 2.6), x0 = Math.max(0, bx - 0.012), x1 = Math.min(1, bx + bw + 0.012);
+    best.cand.ent.b.forEach(function (b) { var cy = b[1] + b[3] / 2;
+      if (cy >= y0 && cy <= y1) { x0 = Math.min(x0, Math.max(0, b[0] - 0.008)); x1 = Math.max(x1, Math.min(1, b[0] + b[2] + 0.008)); } });
+    var ent = best.cand.ent;
+    return { card: best.cand.card, x: x0, y: y0, w: Math.min(1, x1 - x0), h: y1 - y0, iw: ent.W || 2416, ih: ent.H || 1313,
+      text: best.b[4], sc: best.sc, sameCh: sameCh.length > 0 };
+  }
+  function findImgSnippet(it) {
+    // 1) 优先精准引擎（引擎判定不配时尊重其结论，不强行兜底，避免乱配）
+    if (window.TTMatchEngine) {
+      try {
+        if (!window.TTMatchEngine.ready) window.TTMatchEngine.build();
+        return window.TTMatchEngine.match(it);
+      } catch (e) { /* 引擎异常 → 落到内置兜底 */ }
+    }
+    // 2) 引擎文件缺失/异常：内置兜底，保证至少有图
+    try { return fallbackSnippet(it); } catch (e) { return null; }
+  }
+  // 空闲预热引擎，避免第一次答题时同步构建造成的卡顿空白
+  setTimeout(function () {
+    try { if (window.TTMatchEngine && !window.TTMatchEngine.ready) window.TTMatchEngine.build(); } catch (e) {}
+  }, 1800);
   function bindImgSnippet(it, fb) {
     try {
       var sn = findImgSnippet(it);
