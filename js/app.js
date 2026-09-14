@@ -1125,8 +1125,9 @@
     _excludeTipTimer = setTimeout(function () { _excludeTipEl && _excludeTipEl.classList.remove('show'); }, 1200);
   }
 
-  // 草稿纸：按题目稳定标识持久化到 localStorage，单例弹层
-  var DRAFT_KEY = 'ttgd.draft.v1', draftPanel = null, draftCurId = null, draftTa = null;
+  // 草稿纸：全屏透明手写层（平板可用触控笔/手指直接在题目上书写），按题持久化
+  var DRAFT_KEY = 'ttgd.draft.v1', draftLayer = null, draftCanvas = null, draftCtx = null;
+  var draftCurId = null, draftStrokes = [], draftCur = null, draftColor = '#111827', draftWidth = 3;
   function _strHash(s) { var h = 0; s = String(s || ''); for (var i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; } return 'h' + (h >>> 0).toString(36); }
   // 题目稳定唯一键：入库题用 id；整卷原始题用 试卷+题号；都没有则用 科目+题干 哈希
   function draftKeyOf(it) {
@@ -1136,47 +1137,136 @@
     return 'q:' + _strHash((it.subject || '') + '|' + (it.question || ''));
   }
   function loadDrafts() { try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}'); } catch (e) { return {}; } }
-  function saveDrafts(d) { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch (e) {} }
-  function draftHas(id) { var t = loadDrafts()[id]; return !!(t && String(t).trim()); }
+  function saveDrafts(d) {
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); }
+    catch (e) { // 超容量：只保留最近 40 题再试
+      try {
+        var keys = Object.keys(d).slice(-40), nd = {};
+        keys.forEach(function (k) { nd[k] = d[k]; });
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(nd));
+      } catch (e2) {}
+    }
+  }
+  function draftHas(id) { var t = loadDrafts()[id]; return Array.isArray(t) && t.length > 0; }
   function markDraftBtn(id) {
     document.querySelectorAll('.draft-btn').forEach(function (b) {
       if (b.getAttribute('data-draft') === String(id)) b.classList.toggle('has-draft', draftHas(id));
     });
   }
-  function closeDraft() { if (draftPanel) draftPanel.style.display = 'none'; }
+  function _draftSize() { return { w: draftCanvas.clientWidth || window.innerWidth, h: draftCanvas.clientHeight || window.innerHeight }; }
+  function _setupDraftCanvas() {
+    var dpr = window.devicePixelRatio || 1, sz = _draftSize();
+    draftCanvas.width = Math.round(sz.w * dpr);
+    draftCanvas.height = Math.round(sz.h * dpr);
+    draftCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    draftCtx.lineCap = 'round'; draftCtx.lineJoin = 'round';
+  }
+  function _redrawDraft() {
+    if (!draftCtx) return;
+    var sz = _draftSize();
+    draftCtx.clearRect(0, 0, sz.w, sz.h);
+    draftStrokes.forEach(function (st) {
+      if (!st.pts || st.pts.length < 1) return;
+      draftCtx.strokeStyle = st.color; draftCtx.lineWidth = st.width;
+      draftCtx.beginPath();
+      st.pts.forEach(function (p, i) {
+        var x = p[0] * sz.w, y = p[1] * sz.h;
+        if (i === 0) draftCtx.moveTo(x, y); else draftCtx.lineTo(x, y);
+      });
+      draftCtx.stroke();
+    });
+  }
+  function _persistDraft() {
+    var d = loadDrafts();
+    if (draftStrokes.length) d[draftCurId] = draftStrokes; else delete d[draftCurId];
+    saveDrafts(d);
+  }
+  function _bindInk() {
+    var pos = function (e) { var r = draftCanvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    draftCanvas.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      try { draftCanvas.setPointerCapture(e.pointerId); } catch (err) {}
+      var sz = _draftSize(), p = pos(e);
+      draftCur = { color: draftColor, width: draftWidth, pts: [[p.x / sz.w, p.y / sz.h]] };
+      draftStrokes.push(draftCur);
+      draftCtx.strokeStyle = draftColor; draftCtx.lineWidth = draftWidth;
+      draftCtx.beginPath(); draftCtx.moveTo(p.x, p.y);
+    });
+    draftCanvas.addEventListener('pointermove', function (e) {
+      if (!draftCur) return;
+      e.preventDefault();
+      var sz = _draftSize(), p = pos(e);
+      draftCur.pts.push([p.x / sz.w, p.y / sz.h]);
+      draftCtx.lineTo(p.x, p.y); draftCtx.stroke();
+    });
+    var end = function (e) {
+      if (!draftCur) return;
+      draftCur = null; _persistDraft();
+    };
+    draftCanvas.addEventListener('pointerup', end);
+    draftCanvas.addEventListener('pointercancel', end);
+    window.addEventListener('resize', function () { if (draftLayer && draftLayer.style.display !== 'none') { _setupDraftCanvas(); _redrawDraft(); } });
+  }
+  function closeDraft() {
+    if (!draftLayer) return;
+    _persistDraft(); markDraftBtn(draftCurId);
+    draftLayer.style.display = 'none';
+  }
   function openDraft(id) {
     draftCurId = id;
-    if (!draftPanel) {
-      draftPanel = document.createElement('div');
-      draftPanel.className = 'draft-mask';
-      draftPanel.innerHTML =
-        '<div class="draft-panel" role="dialog" aria-label="草稿纸">' +
-        '  <div class="draft-head"><span class="draft-title">📝 草稿纸</span><button class="draft-close" aria-label="关闭">×</button></div>' +
-        '  <textarea class="draft-textarea" placeholder="在这里打草稿、记思路、做简单计算…（自动按本题保存，切换题目会保留）"></textarea>' +
-        '  <div class="draft-foot"><span class="spacer">自动保存</span><button class="draft-clear">清空本草稿</button><button class="draft-done">完成</button></div>' +
+    if (!draftLayer) {
+      draftLayer = document.createElement('div');
+      draftLayer.className = 'draft-layer';
+      draftLayer.innerHTML =
+        '<canvas class="draft-canvas"></canvas>' +
+        '<div class="draft-bar">' +
+        '  <button class="db-btn db-done" title="完成并保存">✓ 完成</button>' +
+        '  <button class="db-btn db-undo" title="撤销上一笔">↶ 撤销</button>' +
+        '  <button class="db-btn db-clear" title="清空本草稿">🗑 清空</button>' +
+        '  <span class="db-sep"></span>' +
+        '  <span class="db-colors">' +
+        '    <button class="db-color is-on" data-c="#111827" style="background:#111827"></button>' +
+        '    <button class="db-color" data-c="#e11d48" style="background:#e11d48"></button>' +
+        '    <button class="db-color" data-c="#2563eb" style="background:#2563eb"></button>' +
+        '  </span>' +
+        '  <span class="db-sep"></span>' +
+        '  <button class="db-btn db-pen is-on" data-w="3">细</button>' +
+        '  <button class="db-btn db-pen" data-w="7">粗</button>' +
         '</div>';
-      document.body.appendChild(draftPanel);
-      draftTa = draftPanel.querySelector('.draft-textarea');
-      draftTa.addEventListener('input', function () {
-        var d = loadDrafts(); if (draftTa.value) d[draftCurId] = draftTa.value; else delete d[draftCurId];
-        saveDrafts(d);
+      document.body.appendChild(draftLayer);
+      draftCanvas = draftLayer.querySelector('.draft-canvas');
+      draftCtx = draftCanvas.getContext('2d');
+      _bindInk();
+      draftLayer.querySelector('.db-done').addEventListener('click', closeDraft);
+      draftLayer.querySelector('.db-undo').addEventListener('click', function () {
+        draftStrokes.pop(); draftCur = null; _redrawDraft(); _persistDraft();
       });
-      draftPanel.querySelector('.draft-done').addEventListener('click', function () {
-        markDraftBtn(draftCurId); closeDraft();
+      draftLayer.querySelector('.db-clear').addEventListener('click', function () {
+        draftStrokes = []; draftCur = null;
+        var sz = _draftSize(); draftCtx.clearRect(0, 0, sz.w, sz.h);
+        var d = loadDrafts(); delete d[draftCurId]; saveDrafts(d); markDraftBtn(draftCurId);
       });
-      draftPanel.querySelector('.draft-close').addEventListener('click', function () {
-        markDraftBtn(draftCurId); closeDraft();
+      draftLayer.querySelectorAll('.db-color').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          draftColor = btn.dataset.c;
+          draftLayer.querySelectorAll('.db-color').forEach(function (b) { b.classList.toggle('is-on', b === btn); });
+        });
       });
-      draftPanel.querySelector('.draft-clear').addEventListener('click', function () {
-        draftTa.value = '';
-        var d = loadDrafts(); delete d[draftCurId]; saveDrafts(d);
-        markDraftBtn(draftCurId); draftTa.focus();
+      draftLayer.querySelectorAll('.db-pen').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          draftWidth = parseInt(btn.dataset.w, 10);
+          draftLayer.querySelectorAll('.db-pen').forEach(function (b) { b.classList.toggle('is-on', b === btn); });
+        });
       });
-      draftPanel.addEventListener('click', function (e) { if (e.target === draftPanel) { markDraftBtn(draftCurId); closeDraft(); } });
     }
-    draftTa.value = loadDrafts()[id] || '';
-    draftPanel.style.display = 'flex';
-    setTimeout(function () { draftTa.focus(); }, 60);
+    draftLayer.style.display = 'block';
+    // 等元素显示、布局完成后再按真实尺寸初始化画布并载入本题笔迹
+    setTimeout(function () {
+      var saved = loadDrafts()[id];
+      draftStrokes = Array.isArray(saved) ? saved : [];
+      draftCur = null;
+      _setupDraftCanvas(); _redrawDraft();
+    }, 60);
   }
   function bindDraftBtn(scope, id) {
     (scope || document).querySelectorAll('.draft-btn').forEach(function (b) {
