@@ -27,6 +27,7 @@
     imgBrowseSub: null,      // 看图卡库：当前浏览的科目
     imgBrowseCh: null,       // 看图卡库：当前浏览的章节
     learnBusy: false,
+    reciteMode: false,    // 背题模式：直接显示答案解析、不计入做题记录与正确率
     learnTimerInterval: null,
     exam: null             // 整卷考试会话
   };
@@ -1340,38 +1341,100 @@
   }
 
   /* ---------- 选择题（刷题） ---------- */
+  // 个人真实做题数据条（只统计本机/本账号真实作答，不造全站数据）
+  function quizAttempts(it) {
+    const total = (it.firstLearnDate ? 1 : 0) + (it.reviewCount || 0);
+    const wrong = it.wrongCount || 0;
+    return { total, wrong, right: Math.max(0, total - wrong) };
+  }
+  function quizStatHtml(it) {
+    const a = quizAttempts(it);
+    if (a.total <= 0) return '<div class="quiz-stat is-new">🆕 首次练习 · 加油</div>';
+    const pct = Math.round(a.right / a.total * 100);
+    const cls = pct >= 80 ? 'good' : pct >= 50 ? 'mid' : 'bad';
+    const icon = pct >= 80 ? '✅' : pct >= 50 ? '📈' : '⚠️';
+    return `<div class="quiz-stat ${cls}">${icon} 做过 ${a.total} 次 · 错 ${a.wrong} 次 · 历史正确率 ${pct}%</div>`;
+  }
   function renderQuiz(it) {
     const letters = ['A', 'B', 'C', 'D', 'E'];
-    const opts = it.options.map((o, i) => `
-      <div class="option" data-i="${i}">
+    const recite = App.reciteMode;
+    const opts = it.options.map((o, i) => {
+      const ans = ansHas(it.answer, i);
+      const cls = 'option' + (recite && ans ? ' correct disabled' : '');
+      return `
+      <div class="${cls}" data-i="${i}">
         <span class="opt-key">${letters[i]}</span>
         <span>${esc(o)}</span>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     const entry = App.learnQueue[App.learnIndex];
     const typeTag = entry.isNew ? '<span class="tag type">新学</span>' : '<span class="tag type">复习</span>';
     const srcTag = App.learnSource === 'subject' ? '<span class="tag sub">科目练习</span>' :
       (App.learnSource === 'wrong' ? '<span class="tag sub">错题重练</span>' : '');
     const multiTag = isMulti(it.answer) ? '<span class="tag sub">多选</span>' : '';
+    const reciteTag = recite ? '<span class="tag recite-tag">📖 背题</span>' : '';
+    const questionHint = recite
+      ? '<div class="multi-hint recite-hint">背题模式：答案与解析已直接展开，左右对照记忆，不计入正确率</div>'
+      : (isMulti(it.answer) ? '<div class="multi-hint">（多选 · 可点选多项后再提交）</div>' : '') +
+        '<div class="multi-hint">小技巧：长按选项可排除/恢复，右上角「草稿」可打草稿</div>';
     return `
       <div class="learn-card">
         <div class="learn-meta">
           <span class="tag sub" data-subject="${esc(it.subject)}">${esc(it.subject)}</span>
-          ${typeTag}${srcTag}${multiTag}
+          ${typeTag}${srcTag}${multiTag}${reciteTag}
           ${it.reviewCount > 0 ? `<span class="tag sub">已复习 ${it.reviewCount} 次</span>` : ''}
           <span class="learn-tools"><button class="draft-btn ${draftHas(draftKeyOf(it)) ? 'has-draft' : ''}" data-draft="${esc(draftKeyOf(it))}">📝 草稿</button></span>
         </div>
-        <div class="learn-question">${esc(it.question)}${isMulti(it.answer) ? '<div class="multi-hint">（多选 · 可点选多项后再提交）</div>' : ''}<div class="multi-hint">小技巧：长按选项可排除/恢复，右上角「草稿」可打草稿</div></div>
+        <div class="learn-question">${esc(it.question)}${questionHint}</div>
+        ${quizStatHtml(it)}
         <div class="option-list" id="opt-list">${opts}</div>
         <div id="quiz-feedback"></div>
       </div>
       <div class="learn-actions" id="quiz-actions"></div>`;
   }
 
-  function bindQuiz(it) {
+  function ansArrOf(ans) { return Array.isArray(ans) ? ans.slice() : [ans]; }
+  // 作答 / 背题统一的结果呈现：选项着色 + 分区解析 + 导图 + AI + 下一题
+  function revealQuiz(it, chosen, correct, recite) {
+    const fb = $('#quiz-feedback'), actions = $('#quiz-actions');
+    const chosenArr = (Array.isArray(chosen) ? chosen.slice() : [chosen]).sort((a, b) => a - b);
+    $$('.option').forEach((o, i) => {
+      o.classList.add('disabled');
+      if (ansHas(it.answer, i)) o.classList.add('correct');
+      if (chosenArr.indexOf(i) >= 0 && !ansHas(it.answer, i)) o.classList.add('wrong');
+    });
+    const ansL = ansLetters(it.answer), youL = chosenArr.length ? ansLetters(chosenArr) : '未作答';
+    const head = recite
+      ? `<div class="feedback recite"><div class="fb-title">📖 背题模式 · 正确答案 ${ansL}</div></div>`
+      : (correct
+        ? `<div class="feedback ok"><div class="fb-title">✓ 回答正确 · 答案 ${ansL}</div></div>`
+        : `<div class="feedback bad"><div class="fb-title">✗ 回答错误 · 正确答案 ${ansL}（你选 ${youL}）</div></div>`);
+    const sec = it.explain ? `<div class="fb-section"><div class="fb-sec-title">📝 试题解析</div><div class="fb-sec-body">${esc(it.explain)}</div></div>` : '';
+    fb.innerHTML = head + sec;
+    bindImgSnippet(it, fb);
+    bindAiExplain(it, recite ? ansL : youL, fb);
     const entry = App.learnQueue[App.learnIndex];
-    const optList = $('#opt-list');
-    const fb = $('#quiz-feedback');
-    const actions = $('#quiz-actions');
+    if (!recite) {
+      TTScheduler.learnItem(it.id, correct ? 'ok' : 'wrong');
+      afterQuiz(correct);
+      App.learnResults.push({ id: it.id, ok: correct, isNew: entry.isNew });
+      saveLearnSession();
+    }
+    actions.innerHTML = `<button class="btn-primary" id="btn-next">${App.learnIndex + 1 >= App.learnQueue.length ? (recite ? '看完了' : '完成') : '下一题'}</button>`;
+    $('#btn-next').addEventListener('click', () => {
+      if (!recite) App.learnBusy = false;
+      App.learnIndex++; saveLearnSession(); renderLearn();
+    });
+  }
+
+  function bindQuiz(it) {
+    const optList = $('#opt-list'), actions = $('#quiz-actions');
+    // 背题模式：直接展开答案与解析，不绑定作答、不计入做题记录与正确率
+    if (App.reciteMode) {
+      bindDraftBtn(null, draftKeyOf(it));
+      revealQuiz(it, ansArrOf(it.answer), true, true);
+      return;
+    }
     let answered = false;
 
     // ---------- 多选（answer 为数组） ----------
@@ -1386,22 +1449,7 @@
           App.learnBusy = true;
           chosen.sort((a, b) => a - b);
           const correct = chosen.length === it.answer.length && chosen.every((v, i) => v === it.answer[i]);
-          $$('.option').forEach((o, i) => {
-            o.classList.add('disabled');
-            if (it.answer.indexOf(i) >= 0) o.classList.add('correct');
-            if (chosen.indexOf(i) >= 0 && it.answer.indexOf(i) < 0) o.classList.add('wrong');
-          });
-          fb.innerHTML = correct
-            ? `<div class="feedback ok"><div class="fb-title">✓ 回答正确</div>${esc(it.explain || '')}</div>`
-            : `<div class="feedback bad"><div class="fb-title">✗ 回答错误，正确答案 ${ansLetters(it.answer)}</div>${esc(it.explain || '')}</div>`;
-          bindImgSnippet(it, fb);
-          bindAiExplain(it, ansLetters(chosen), fb);
-          const r = TTScheduler.learnItem(it.id, correct ? 'ok' : 'wrong');
-          afterQuiz(correct);
-          App.learnResults.push({ id: it.id, ok: correct, isNew: entry.isNew });
-          saveLearnSession();
-          actions.innerHTML = `<button class="btn-primary" id="btn-next">${App.learnIndex + 1 >= App.learnQueue.length ? '完成' : '下一题'}</button>`;
-          $('#btn-next').addEventListener('click', () => { App.learnIndex++; App.learnBusy = false; saveLearnSession(); renderLearn(); });
+          revealQuiz(it, chosen, correct, false);
         });
       };
       optList.addEventListener('click', e => {
@@ -1439,31 +1487,7 @@
       if (excluded.has(chosenIdx)) return; // 已排除项不可点选
       answered = true;
       App.learnBusy = true;
-
-      const chosen = chosenIdx;
-      const correct = chosen === it.answer;
-
-      $$('.option').forEach((o, i) => {
-        o.classList.add('disabled');
-        if (i === it.answer) o.classList.add('correct');
-        if (i === chosen && !correct) o.classList.add('wrong');
-      });
-
-      fb.innerHTML = correct
-        ? `<div class="feedback ok"><div class="fb-title">✓ 回答正确</div>${esc(it.explain || '')}</div>`
-        : `<div class="feedback bad"><div class="fb-title">✗ 回答错误，正确答案 ${'ABCDE'[it.answer]}</div>${esc(it.explain || '')}</div>`;
-      bindImgSnippet(it, fb);
-      bindAiExplain(it, 'ABCDE'[chosen], fb);
-
-      const ok = correct ? 'ok' : 'wrong';
-      const r = TTScheduler.learnItem(it.id, ok);
-      afterQuiz(correct);
-      App.learnResults.push({ id: it.id, ok: correct, isNew: entry.isNew });
-      saveLearnSession();
-
-      actions.innerHTML = `
-        <button class="btn-primary" id="btn-next">${App.learnIndex + 1 >= App.learnQueue.length ? '完成' : '下一题'}</button>`;
-      $('#btn-next').addEventListener('click', () => { App.learnIndex++; App.learnBusy = false; saveLearnSession(); renderLearn(); });
+      revealQuiz(it, chosenIdx, chosenIdx === it.answer, false);
     });
     // 长按排除/恢复
     attachExcludeGesture(optList, (opt, i) => {
@@ -3713,6 +3737,21 @@
 
     $('#btn-start').addEventListener('click', () => startLearning());
     $('#btn-exit-learn').addEventListener('click', exitLearn);
+    // 做题 / 背题模式切换（背题直接看答案解析、不计入正确率；整卷考试中禁用）
+    try { App.reciteMode = localStorage.getItem('ttgd.recite') === '1'; } catch (e) { App.reciteMode = false; }
+    const syncReciteBtn = () => {
+      const b = $('#btn-recite'); if (!b) return;
+      b.classList.toggle('active', App.reciteMode);
+      b.textContent = App.reciteMode ? '✏️ 做题' : '📖 背题';
+    };
+    on('#btn-recite', 'click', () => {
+      if (App.exam) { toast('整卷考试中请真实作答，不能切换背题'); return; }
+      App.reciteMode = !App.reciteMode;
+      try { localStorage.setItem('ttgd.recite', App.reciteMode ? '1' : '0'); } catch (e) {}
+      syncReciteBtn();
+      if (App.learnQueue.length && !App.learnSessionDone) { App.learnBusy = false; renderLearn(); }
+    });
+    syncReciteBtn();
     $('#btn-plan').addEventListener('click', () => switchTab('practice'));
 
     $('#btn-settings').addEventListener('click', openSettings);
