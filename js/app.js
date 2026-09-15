@@ -208,18 +208,48 @@
     try {
       var sn = findImgSnippet(it);
       if (!sn) return;
+      try { window.__ttZoom = openZoomViewer; } catch (e) {}
       var wrap = document.createElement('div');
       wrap.className = 'img-snippet';
       var iwPct = (100 / sn.w).toFixed(2), ihPct = (100 / sn.h).toFixed(2);
       var lPct = (-100 * sn.x / sn.w).toFixed(2), tPct = (-100 * sn.y / sn.h).toFixed(2);
       var ratio = (sn.w * sn.iw) / (sn.h * sn.ih);
+      var fullSrc = ossThumb(sn.card.image, 1600, 88);
       wrap.innerHTML =
-        '<div class="img-snippet-label">📎 对应导图片段 · 点击看全图</div>' +
+        '<div class="img-snippet-label">📎 对应导图片段（与答案相关）</div>' +
         '<div class="img-snippet-viewport" style="aspect-ratio:' + ratio.toFixed(3) + '">' +
         '<img src="' + esc(ossThumb(sn.card.image, 1400, 85)) + '" alt="导图片段" loading="lazy" style="width:' + iwPct + '%;height:' + ihPct + '%;left:' + lPct + '%;top:' + tPct + '%">' +
         '</div>' +
-        '<div class="img-snippet-foot">' + esc(cleanChapter(sn.card.chapter || '')) + ' 导图' + (sn.sameCh ? '' : '（同科目匹配）') + '</div>';
-      wrap.querySelector('.img-snippet-viewport').addEventListener('click', function () { openZoomViewer(sn.card); });
+        '<div class="img-snippet-foot"><span class="img-snippet-chap">' + esc(cleanChapter(sn.card.chapter || '')) + ' 导图' + (sn.sameCh ? '' : '（同科目匹配）') + '</span>' +
+        '<span class="img-snippet-actions">' +
+        '<button type="button" class="img-snippet-btn is-full-btn" data-act="full">查看整张导图 ▾</button>' +
+        '<button type="button" class="img-snippet-btn is-zoom-btn" data-act="zoom">全屏放大</button>' +
+        '</span></div>' +
+        '<div class="img-snippet-full"><div class="img-snippet-full-head"><span>📖 整张导图 · 可上下滑动查看</span>' +
+        '<button type="button" class="img-snippet-btn is-collapse-btn">收起 ▴</button></div>' +
+        '<img class="img-snippet-full-img" alt="整张导图" loading="lazy" data-src="' + esc(fullSrc) + '"></div>';
+      var vp = wrap.querySelector('.img-snippet-viewport');
+      var fullBox = wrap.querySelector('.img-snippet-full');
+      var fullImg = wrap.querySelector('.img-snippet-full-img');
+      var fullBtn = wrap.querySelector('.is-full-btn');
+      function setFull(open) {
+        if (open) {
+          if (fullImg && fullImg.getAttribute('data-src') && !fullImg.getAttribute('src')) {
+            fullImg.src = fullImg.getAttribute('data-src'); fullImg.removeAttribute('data-src');
+          }
+          fullBox.classList.add('open');
+          if (fullBtn) fullBtn.textContent = '收起整图 ▴';
+        } else {
+          fullBox.classList.remove('open');
+          if (fullBtn) fullBtn.textContent = '查看整张导图 ▾';
+        }
+      }
+      vp.addEventListener('click', function () { openZoomViewer(sn.card); });
+      if (fullBtn) fullBtn.addEventListener('click', function () { setFull(!fullBox.classList.contains('open')); });
+      var collapse = wrap.querySelector('.is-collapse-btn');
+      if (collapse) collapse.addEventListener('click', function () { setFull(false); });
+      var zoomBtn = wrap.querySelector('.is-zoom-btn');
+      if (zoomBtn) zoomBtn.addEventListener('click', function () { openZoomViewer(sn.card); });
       fb.appendChild(wrap);
     } catch (e) { /* 片段是增强功能，失败不影响刷题 */ }
   }

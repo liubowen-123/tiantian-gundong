@@ -1,27 +1,27 @@
 /* 天天滚动 · Service Worker（PWA 离线缓存 + 版本更新提示） */
-const CACHE = 'ttgd-v18';
+const CACHE = 'ttgd-v19';
 const IMG_CACHE = 'ttgd-img-v3';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  './css/style.css?v=20260915a',
-  './js/storage.js?v=20260915a',
-  './js/scheduler.js?v=20260915a',
-  './js/anki.js?v=20260915a',
-  './js/data.js?v=20260915a',
-  './js/bundled_questions.js?v=20260915a',
-  './js/bundled_imagecards.js?v=20260915a',
-  './js/paper_data.js?v=20260915a',
-  './js/img_ocr_index.js?v=20260915a',
-  './js/match-engine.js?v=20260915a',
-  './js/plan-data.js?v=20260915a',
-  './js/app.js?v=20260915a',
+  './css/style.css?v=20260915b',
+  './js/storage.js?v=20260915b',
+  './js/scheduler.js?v=20260915b',
+  './js/anki.js?v=20260915b',
+  './js/data.js?v=20260915b',
+  './js/bundled_questions.js?v=20260915b',
+  './js/bundled_imagecards.js?v=20260915b',
+  './js/paper_data.js?v=20260915b',
+  './js/img_ocr_index.js?v=20260915b',
+  './js/match-engine.js?v=20260915b',
+  './js/plan-data.js?v=20260915b',
+  './js/app.js?v=20260915b',
   './js/vendor/supabase.min.js',
-  './js/supabase-config.js?v=20260915a',
-  './js/sync.js?v=20260915a',
-  './js/ai.js?v=20260915a',
-  './js/exam-fix.js?v=20260915a',
+  './js/supabase-config.js?v=20260915b',
+  './js/sync.js?v=20260915b',
+  './js/ai.js?v=20260915b',
+  './js/exam-fix.js?v=20260915b',
   './icons/icon.svg'
 ];
 

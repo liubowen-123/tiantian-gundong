@@ -487,7 +487,29 @@ html.dark .option.excluded { background: #20242b; border-color: #3a4150; }
   box-shadow: 0 1px 4px rgba(31, 90, 68, .08);
 }
 .img-snippet-viewport img { position: absolute; max-width: none; user-select: none; -webkit-user-drag: none; }
-.img-snippet-foot { font-size: 11px; color: #8a9a92; margin-top: 5px; }
+.img-snippet-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 11px; color: #8a9a92; margin-top: 6px; }
+.img-snippet-chap { flex: 1 1 auto; min-width: 0; }
+.img-snippet-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.img-snippet-btn {
+  font-size: 12px; font-weight: 600; line-height: 1.2; color: #1f7a58;
+  background: #eaf5ef; border: 1px solid #cfe6da; border-radius: 9px;
+  padding: 7px 12px; min-height: 34px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.img-snippet-btn:active { background: #d6ecdf; }
+.is-collapse-btn { background: #ffffff; }
+/* 整张导图：默认收起，点开后限高可纵向滑动 */
+.img-snippet-full {
+  display: none; margin-top: 8px; border: 1px solid #d9e8e0; border-radius: 10px;
+  background: #ffffff; max-height: 72vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  box-shadow: 0 1px 4px rgba(31, 90, 68, .08);
+}
+.img-snippet-full.open { display: block; }
+.img-snippet-full-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 10px; background: #f1f8f4; border-bottom: 1px solid #e2efe8;
+  font-size: 12px; font-weight: 600; color: #1f7a58; position: sticky; top: 0; z-index: 1;
+}
+.img-snippet-full > img { display: block; width: 100%; height: auto; }
 @keyframes aiBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 
 .learn-actions { display: flex; gap: 10px; margin-top: 16px; }
@@ -1120,6 +1142,11 @@ html.dark .ai-explain-box { background: #0f1f18; color: #c9e6d6; border-color: #
 html.dark .img-snippet-label { color: #7fd7ab; }
 html.dark .img-snippet-viewport { background: #0f1f18; border-color: #2f8f6b; }
 html.dark .img-snippet-foot { color: #6f8a7c; }
+html.dark .img-snippet-btn { color: #7fd7ab; background: #16332533; border-color: #2f6b50; }
+html.dark .img-snippet-btn:active { background: #1d4634; }
+html.dark .is-collapse-btn { background: #12241b; }
+html.dark .img-snippet-full { background: #0f1f18; border-color: #2f8f6b; }
+html.dark .img-snippet-full-head { background: #122a1f; border-bottom-color: #24503c; color: #7fd7ab; }
 html.dark .flashcard-front { background: linear-gradient(160deg, #18221d, #141e19); border-color: #24352d; }
 html.dark .flashcard-back { background: linear-gradient(160deg, #1d3a2e, #162b22); }
 html.dark .tabbar { background: rgba(16, 23, 19, .92); }

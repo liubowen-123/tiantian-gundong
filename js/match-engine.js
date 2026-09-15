@@ -60,7 +60,7 @@
       '蛋白质的合成':['翻译'], '基因表达调控':['基因表达调控'], 'DNA重组':['小基因'],
       '常用的分子生物学技术':['小基因'], 'DNA损伤和损伤修复':['DNA损伤'],
       '肝的生物化学':['生物转化','胆色素'], '血液的生物化学':['血浆脂蛋白'],
-      '细胞信号转导与疾病':['酶'], '代谢的整合与调节':['酶'], '癌症的分子基础':['基因表达调控','真核基因']
+      '细胞信号转导与疾病':['信号转导','信号通路'], '代谢的整合与调节':['代谢调节','代谢整合'], '癌症的分子基础':['基因表达调控','真核基因']
     },
     '病理学': {
       '细胞和组织的适应与损伤':['适应和损伤'], '损伤的修复':['损伤的修复'], '局部血液循环障碍':['局部血液循环障碍'],
@@ -130,11 +130,19 @@
     var tm = String(text).match(/[A-Za-z][A-Za-z0-9]*(?:\d+)?/g);
     if (tm) tm.forEach(function (t) { var u = t.toUpperCase(); if (u.length >= 2 && !st[u]) { st[u]=1; tok.push(u); } });
     var segs = String(text).match(/[一-龥]+/g) || [];
-    segs.forEach(function (seg) {
+    // OCR 归一：中文片段额外生成一套“去连接符/阿拉伯与罗马数字”的 gram，
+    // 修复“磷酸果糖激酶-1 / 激酶一1 / 辅酶Ⅰ”等异体写法导致的答案词漏匹配（不删中文数字，避免误伤“一级结构”）
+    var NORM_RE = /[0-9０-９ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩⅪⅫ\-—–−_·\.．]/g;
+    function pushGrams(seg) {
       var n = seg.length;
       for (var i = 0; i + 2 <= n; i++) { var t=seg.substr(i,2); if(!s2[t]){s2[t]=1;g2.push(t);} }
       for (var j = 0; j + 3 <= n; j++) { var t3=seg.substr(j,3); if(!s3[t3]){s3[t3]=1;g3.push(t3);} }
       for (var k = 0; k + 4 <= n; k++) { var t4=seg.substr(k,4); if(!s4[t4]){s4[t4]=1;g4.push(t4);} }
+    }
+    segs.forEach(function (seg) {
+      pushGrams(seg);
+      var norm = seg.replace(NORM_RE, '');
+      if (norm && norm !== seg) pushGrams(norm);
     });
     return { g2: g2, g3: g3, g4: g4, tok: tok };
   }
@@ -215,7 +223,7 @@
     _query: function (it, strict) {
       var ans = it.answer, ansArr = Array.isArray(ans) ? ans : (ans == null ? [] : [ans]), correct = [];
       (it.options || []).forEach(function (o, i) { if (ansArr.indexOf(i) >= 0) correct.push(o); });
-      var S = {}, W = {}, H = {}, self = this, SIDF = strict ? 2.3 : 1.35;
+      var S = {}, W = {}, H = {}, A = {}, self = this, SIDF = strict ? 2.3 : 1.35;
       function feed(text, sw, ww, isAnchor) {
         if (!text) return;
         var te = extractTerms(text);
@@ -247,33 +255,80 @@
       feed(it.question, 1.0, 0.55, true);
       feed(correct.join(' '), 3.0, 1.4, true);
       feed(cleanExplain(it.explain), 0.85, 0.25, false);
-      return { S: S, W: W, H: H };
+
+      /* 答案专名通道 A：只来自【正确选项】，与题干/解析分离，用于“答案一致性”选块/选卡。
+         这是“严格按题目和答案匹配、绝不乱配”的关键：名词型答案必须定位到真正讲到该专名的块。 */
+      var hasAns = false;
+      var cte = extractTerms(correct.join(' '));
+      function addAns(arr, w, minIdf) {
+        arr.forEach(function (t) {
+          if (STOP3[t]) return;
+          if (t.length === 4 && (STOP3[t.substr(0, 3)] || STOP3[t.substr(1, 3)])) return;
+          if (t.length === 2 && STOP2[t]) return;
+          var idf = self.idf(t);
+          if (minIdf != null && idf < minIdf) return;
+          var v = w * idf;
+          if (A[t] == null || v > A[t]) { A[t] = v; hasAns = true; }
+        });
+      }
+      addAns(cte.g4, 3.4, 1.2);
+      addAns(cte.g3, 2.8, 1.2);
+      addAns(cte.tok, 3.2, 0.8);
+      addAns(cte.g2, 2.4, 2.4);   // 两字答案专名（肽键/氢键/辅酶/激酶…）要求足够稀有
+      return { S: S, W: W, H: H, A: A, hasAns: hasAns };
     },
 
     _blockScore: function (pb, Q) {
-      var ss = 0, ws = 0, hits = [], anchor = 0;
+      var ss = 0, ws = 0, ansSc = 0, hits = [], ansHits = [], anchor = 0;
       function strong(t, mul) { var v = Q.S[t]; if (v != null) { ss += v * mul; hits.push(t); if (Q.H[t] != null) anchor = Math.max(anchor, Q.H[t]); } }
       pb.g3.forEach(function (t) { strong(t, 1.0); });
       pb.g4.forEach(function (t) { strong(t, 1.15); });
       pb.tok.forEach(function (t) { strong(t, 1.3); });
-      pb.g2.forEach(function (t) { if (STOP2[t]) return; var v = Q.W[t]; if (v != null) ws += v; });
+      pb.g2.forEach(function (t) {
+        if (STOP2[t]) return;
+        // 修复：稀有两字专名被 _query 升入 S 后，块级也必须能在 S 命中（旧版只查 W，导致“肽键”等两字答案永不命中）
+        var vs = Q.S[t];
+        if (vs != null) { ss += vs * 0.95; hits.push(t); if (Q.H[t] != null) anchor = Math.max(anchor, Q.H[t]); }
+        var v = Q.W[t]; if (v != null) ws += v;
+      });
+      // 答案专名命中分（独立累计，只用于答案一致性判断与排序，不重复计入 ss）
+      function ans(t, mul) { var v = Q.A[t]; if (v != null) { ansSc += v * mul; ansHits.push(t); } }
+      pb.g4.forEach(function (t) { ans(t, 1.1); });
+      pb.g3.forEach(function (t) { ans(t, 1.0); });
+      pb.tok.forEach(function (t) { ans(t, 1.2); });
+      pb.g2.forEach(function (t) { ans(t, 0.9); });
       // 硬锚点：强术语分必须达标；双字辅助分封顶（不超过强分的 75%）
-      if (ss < 3.0) return { sc: 0, hits: [], anchor: 0 };
+      if (ss < 3.0) return { sc: 0, hits: [], ansHits: [], ansSc: 0, anchor: 0 };
       ws = Math.min(ws, ss * 0.75);
-      return { sc: ss + ws, ss: ss, ws: ws, hits: hits, anchor: anchor };
+      return { sc: ss + ws, ss: ss, ws: ws, ansSc: ansSc, hits: hits, ansHits: ansHits, anchor: anchor };
     },
 
     _docScore: function (doc, Q) {
       var ranked = [];
       for (var i = 0; i < doc.pblocks.length; i++) {
         var pb = doc.pblocks[i], r = this._blockScore(pb, Q);
-        if (r.sc > 0) ranked.push({ b: pb.b, sc: r.sc, ss: r.ss, anchor: r.anchor, hits: r.hits, cy: pb.b[1] + pb.b[3] / 2 });
+        if (r.sc > 0) ranked.push({ b: pb.b, sc: r.sc, ss: r.ss, ansSc: r.ansSc, anchor: r.anchor,
+          hits: r.hits, ansHits: r.ansHits, cy: pb.b[1] + pb.b[3] / 2 });
       }
       if (!ranked.length) return null;
       ranked.sort(function (a, b) { return b.sc - a.sc; });
-      var top = ranked[0], sc = top.sc, used = [top];
-      for (var k = 1; k < ranked.length && used.length < 3; k++) {
-        if (Math.abs(ranked[k].cy - top.cy) < 0.10) { sc += ranked[k].sc * 0.45; used.push(ranked[k]); }
+      // 答案锚定：名词型答案只在“命中答案专名”的块里选 top，避免题干泛词把块带偏到别的知识点
+      var ansBlocks = Q.hasAns ? ranked.filter(function (x) { return x.ansSc > 0; }) : [];
+      var ansMatched = ansBlocks.length > 0;
+      var top;
+      if (ansMatched) {
+        ansBlocks.sort(function (a, b) { return b.ansSc - a.ansSc || b.sc - a.sc; });
+        top = ansBlocks[0];
+      } else {
+        top = ranked[0];
+      }
+      var sc = top.sc, used = [top];
+      // 邻近块合并扩框：优先合并与 top 答案命中状态一致的邻近块
+      for (var k = 0; k < ranked.length && used.length < 4; k++) {
+        if (ranked[k] === top) continue;
+        if (Math.abs(ranked[k].cy - top.cy) < 0.10 && ((ranked[k].ansSc > 0) === ansMatched)) {
+          sc += ranked[k].sc * 0.4; used.push(ranked[k]);
+        }
       }
       // 章节名命中：章节名是最可靠的主题信号（如题目含 ARDS，章节名就是 ARDS）
       var chHit = 0, chAnc = 0, self = this;
@@ -286,7 +341,7 @@
       });
       if (chAnc > top.anchor) top.anchor = chAnc;
       sc += chHit * 1.6;
-      return { sc: sc, ss: top.ss + chHit, top: top, used: used };
+      return { sc: sc, ss: top.ss + chHit, top: top, used: used, ansMatched: ansMatched, ansSc: top.ansSc || 0 };
     },
 
     /* 在指定文档池内评分排序，返回 scored[] */
@@ -319,31 +374,85 @@
       var hasSubj = !strict && this._bySubject[it.subject];
       var subject = it.subject, pool;
 
-      // 整卷无科目 → 先按科目聚合自动定科（以强术语分 ss 为准）
+      // 阈值：sc=总分, ss=强术语分, anchor=题目自身高稀有度锚点的IDF
+      var T_CH = 4.5, SS_CH = 3.0, T_SUBJ = 7.0, SS_SUBJ = 8.0, ANCHOR = strict ? 3.0 : 2.6;
+      var ANS_MIN = 2.6, T_SUBJ_ANS = 5.5;                       // 答案专名命中门槛
+      var T_CH_STRONG = 12.0, SS_CH_STRONG = 8.5, ANCHOR_STRONG = 3.2;  // 同章强题干回退门槛
+
+      // 整卷无科目 → 自动定科。名词型答案优先用“答案专名命中”定科（比题干泛词更硬），
+      // 答案命中打平时再用题干主题分；描述型/无答案命中时回退到强术语 ss 定科。
       if (!hasSubj) {
-        var subjTop = [];
+        var subjTop = [], ansTop = [];
         for (var si = 0; si < five.length; si++) {
           var sp = this._bySubject[five[si]], sr = this._rankPool(sp, Q, null, '');
-          if (sr.length) subjTop.push({ subject: five[si], sc: sr[0].ds.sc, ss: sr[0].ds.ss });
+          if (!sr.length) continue;
+          subjTop.push({ subject: five[si], sc: sr[0].ds.sc, ss: sr[0].ds.ss });
+          var ad = null;
+          for (var ai2 = 0; ai2 < sr.length; ai2++) {
+            if (sr[ai2].ds.ansMatched && (!ad || sr[ai2].ds.ansSc > ad.ds.ansSc)) ad = sr[ai2];
+          }
+          if (ad) ansTop.push({ subject: five[si], ans: ad.ds.ansSc, docSc: ad.ds.sc, plain: sr[0].ds.sc });
         }
-        subjTop.sort(function (a, b) { return b.ss - a.ss || b.sc - a.sc; });
         if (!subjTop.length) return null;
-        var confident = subjTop.length === 1 || subjTop[0].ss >= subjTop[1].ss * 1.4;
-        if (confident) { subject = subjTop[0].subject; hasSubj = true; }
+        var pick = null;
+        if (Q.hasAns && ansTop.length) {
+          // 答案专名打平时，用“该科题干主题最强分 plain”选科（主题最契合者），而非答案块自身分
+          ansTop.sort(function (a, b) { return b.ans - a.ans || b.plain - a.plain; });
+          var a0 = ansTop[0], a1 = ansTop[1];
+          var ansOk = ansTop.length === 1 || a0.ans >= a1.ans * 1.18 ||
+            (a1.ans > 0 && Math.abs(a0.ans - a1.ans) <= a1.ans * 0.05 && a0.plain >= a1.plain);
+          if (ansOk && a0.ans >= ANS_MIN && a0.docSc >= 5.0) pick = a0.subject;
+        }
+        if (!pick) {
+          subjTop.sort(function (a, b) { return b.ss - a.ss || b.sc - a.sc; });
+          var confident = subjTop.length === 1 || subjTop[0].ss >= subjTop[1].ss * 1.4;
+          if (confident) pick = subjTop[0].subject;
+        }
+        if (pick) { subject = pick; hasSubj = true; }
         else return null; // 科目都定不准 → 宁可不显示，杜绝跨科乱配
       } else { pool = this._bySubject[subject]; }
 
-      // 阈值：sc=总分, ss=强术语分, anchor=题目自身高稀有度锚点的IDF
-      var scored, T_CH = 4.5, SS_CH = 3.0, T_SUBJ = 7.0, SS_SUBJ = 8.0, ANCHOR = strict ? 3.0 : 2.6;
-      scored = this._rankPool(this._bySubject[subject], Q, subject, qCh);
+      var scored = this._rankPool(this._bySubject[subject], Q, subject, qCh);
       if (!scored.length) return null;
+      var bySc = function (a, b) { return b.ds.sc - a.ds.sc; };
+      var byAns = function (a, b) { return b.ds.ansSc - a.ds.ansSc || b.ds.sc - a.ds.sc; };
       var L1 = scored.filter(function (x) { return x.csim >= 0.45; });
+
+      /* ============ 名词型答案：严格“答案一致性”路径（宁缺毋滥） ============ */
+      if (Q.hasAns) {
+        // 1) 同章且块命中答案专名 —— 最可靠，优先返回
+        var l1ans = L1.filter(function (x) { return x.ds.ansMatched; });
+        l1ans.sort(byAns);
+        if (l1ans.length && l1ans[0].ds.sc >= T_CH && l1ans[0].ds.ansSc >= ANS_MIN)
+          return this._assemble(l1ans[0], 'ch');
+
+        // 2) 同科命中答案专名（答案知识点画在同科别的卡上，如“肽键”画在酶卡）——跨章捞回
+        var subAns = scored.filter(function (x) { return x.ds.ansMatched; });
+        subAns.sort(byAns);
+        // 同章未命中答案、但题干锚点极强的候选（答案词可能被 OCR 漏识别），保守保留同章
+        var l1Plain = L1.filter(function (x) { return !x.ds.ansMatched; });
+        l1Plain.sort(bySc);
+        if (l1Plain.length && l1Plain[0].ds.sc >= T_CH_STRONG && l1Plain[0].ds.ss >= SS_CH_STRONG &&
+            l1Plain[0].ds.top.anchor >= ANCHOR_STRONG)
+          return this._assemble(l1Plain[0], 'ch');
+        if (subAns.length && (subAns[0].ds.sc >= T_SUBJ_ANS || subAns[0].ds.ansSc >= 6.5) && subAns[0].ds.ansSc >= ANS_MIN) {
+          var marginOk = subAns.length < 2 ||
+            subAns[0].ds.ansSc >= subAns[1].ds.ansSc * 1.12 || subAns[0].ds.sc >= subAns[1].ds.sc * 1.25 ||
+            (subAns[0].ds.ansSc >= subAns[1].ds.ansSc * 0.95 && subAns[0].ds.sc >= subAns[1].ds.sc);
+          if (marginOk) return this._assemble(subAns[0], subAns[0].csim >= 0.45 ? 'ch' : 'subj');
+        }
+        // 名词型答案但没有任何块讲到该专名、同章题干也不够强 → 宁可不显示，杜绝乱配
+        return null;
+      }
+
+      /* ============ 描述型答案：沿用强术语 + 锚点 + margin 路径 ============ */
       if (L1.length) {
-        L1.sort(function (a, b) { return b.ds.sc - a.ds.sc; });
+        L1.sort(bySc);
         // 同章层：候选本就属于同一知识点范围，取最高分即可，不做 margin，但要有强术语锚点
         if (L1[0].ds.sc >= T_CH && L1[0].ds.ss >= SS_CH) return this._assemble(L1[0], 'ch');
       }
       // 同科目层（跨章节）：强术语分+题目自身高稀有度锚点双达标，且与次佳拉开差距
+      scored.sort(bySc);
       if (scored[0].ds.sc >= T_SUBJ && scored[0].ds.ss >= SS_SUBJ && scored[0].ds.top.anchor >= ANCHOR &&
           (scored.length < 2 || scored[0].ds.ss >= scored[1].ds.ss * 1.4))
         return this._assemble(scored[0], scored[0].csim >= 0.45 ? 'ch' : 'subj');
