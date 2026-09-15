@@ -1181,35 +1181,49 @@
     if (draftStrokes.length) d[draftCurId] = draftStrokes; else delete d[draftCurId];
     saveDrafts(d);
   }
+  var draftActiveId = null;
   function _bindInk() {
     var pos = function (e) { var r = draftCanvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-    draftCanvas.addEventListener('pointerdown', function (e) {
+    function start(e) {
+      // 手写笔优先：已有笔/触点在写时，忽略后落下的普通 touch（手掌误触）；新手写笔可抢占
+      if (draftActiveId != null && e.pointerType === 'touch') return;
       e.preventDefault();
-      try { draftCanvas.setPointerCapture(e.pointerId); } catch (err) {}
+      draftActiveId = e.pointerId;
       var sz = _draftSize(), p = pos(e);
       draftCur = { color: draftColor, width: draftWidth, pts: [[p.x / sz.w, p.y / sz.h]] };
       draftStrokes.push(draftCur);
       draftCtx.strokeStyle = draftColor; draftCtx.lineWidth = draftWidth;
       draftCtx.beginPath(); draftCtx.moveTo(p.x, p.y);
-    });
-    draftCanvas.addEventListener('pointermove', function (e) {
-      if (!draftCur) return;
+    }
+    function move(e) {
+      if (!draftCur || draftActiveId !== e.pointerId) return;
       e.preventDefault();
       var sz = _draftSize(), p = pos(e);
       draftCur.pts.push([p.x / sz.w, p.y / sz.h]);
       draftCtx.lineTo(p.x, p.y); draftCtx.stroke();
+    }
+    function finish(e) {
+      if (e && draftActiveId != null && e.pointerId !== draftActiveId) return;
+      if (!draftCur) { draftActiveId = null; return; }
+      draftCur = null; draftActiveId = null; _persistDraft();
+    }
+    // 全屏画布本就铺满视口，不使用 setPointerCapture（iOS 上捕获残留会导致第二笔断触）
+    draftCanvas.addEventListener('pointerdown', start);
+    draftCanvas.addEventListener('pointermove', move);
+    // 抬起/取消统一在 window 收口：即使笔尖抬起点落在元素外也能复位，避免状态卡死
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+    // 阻断 iPad 默认滚动/缩放/回弹手势（必须 passive:false 才能 preventDefault）
+    ['touchstart', 'touchmove'].forEach(function (t) {
+      draftCanvas.addEventListener(t, function (e) { e.preventDefault(); }, { passive: false });
     });
-    var end = function (e) {
-      if (!draftCur) return;
-      draftCur = null; _persistDraft();
-    };
-    draftCanvas.addEventListener('pointerup', end);
-    draftCanvas.addEventListener('pointercancel', end);
+    draftCanvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
     window.addEventListener('resize', function () { if (draftLayer && draftLayer.style.display !== 'none') { _setupDraftCanvas(); _redrawDraft(); } });
   }
   function closeDraft() {
     if (!draftLayer) return;
     _persistDraft(); markDraftBtn(draftCurId);
+    draftCur = null; draftActiveId = null;
     draftLayer.style.display = 'none';
   }
   function openDraft(id) {
@@ -1264,7 +1278,7 @@
     setTimeout(function () {
       var saved = loadDrafts()[id];
       draftStrokes = Array.isArray(saved) ? saved : [];
-      draftCur = null;
+      draftCur = null; draftActiveId = null;
       _setupDraftCanvas(); _redrawDraft();
     }, 60);
   }

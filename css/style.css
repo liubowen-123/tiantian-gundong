@@ -281,11 +281,15 @@ html, body {
   position: fixed; inset: 0; z-index: 9997;
   display: none; background: transparent;
   -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none; overscroll-behavior: none;
+  touch-action: none;
 }
 .draft-layer.is-on { display: block; }
 .draft-canvas {
   position: absolute; inset: 0; width: 100%; height: 100%;
   touch-action: none; cursor: crosshair; background: transparent;
+  -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
 }
 .draft-bar {
   position: absolute; top: calc(10px + env(safe-area-inset-top, 0px)); left: 50%;
