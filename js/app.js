@@ -1158,6 +1158,7 @@
   // 草稿纸：全屏透明手写层（平板可用触控笔/手指直接在题目上书写），按题持久化
   var DRAFT_KEY = 'ttgd.draft.v1', draftLayer = null, draftCanvas = null, draftCtx = null;
   var draftCurId = null, draftStrokes = [], draftCur = null, draftColor = '#111827', draftWidth = 3;
+  var draftMode = 'pen', draftEraseWidth = 22; // 书写模式 pen / 橡皮 eraser（橡皮为 destination-out 擦除笔画）
   function _strHash(s) { var h = 0; s = String(s || ''); for (var i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; } return 'h' + (h >>> 0).toString(36); }
   // 题目稳定唯一键：入库题用 id；整卷原始题用 试卷+题号；都没有则用 科目+题干 哈希
   function draftKeyOf(it) {
@@ -1197,7 +1198,9 @@
     draftCtx.clearRect(0, 0, sz.w, sz.h);
     draftStrokes.forEach(function (st) {
       if (!st.pts || st.pts.length < 1) return;
-      draftCtx.strokeStyle = st.color; draftCtx.lineWidth = st.width;
+      draftCtx.globalCompositeOperation = st.mode === 'eraser' ? 'destination-out' : 'source-over';
+      draftCtx.strokeStyle = st.mode === 'eraser' ? 'rgba(0,0,0,1)' : st.color;
+      draftCtx.lineWidth = st.width;
       draftCtx.beginPath();
       st.pts.forEach(function (p, i) {
         var x = p[0] * sz.w, y = p[1] * sz.h;
@@ -1205,6 +1208,7 @@
       });
       draftCtx.stroke();
     });
+    draftCtx.globalCompositeOperation = 'source-over';
   }
   function _persistDraft() {
     var d = loadDrafts();
@@ -1219,10 +1223,13 @@
       if (draftActiveId != null && e.pointerType === 'touch') return;
       e.preventDefault();
       draftActiveId = e.pointerId;
-      var sz = _draftSize(), p = pos(e);
-      draftCur = { color: draftColor, width: draftWidth, pts: [[p.x / sz.w, p.y / sz.h]] };
+      var sz = _draftSize(), p = pos(e), erasing = draftMode === 'eraser';
+      var w = erasing ? draftEraseWidth : draftWidth;
+      draftCur = { mode: draftMode, color: draftColor, width: w, pts: [[p.x / sz.w, p.y / sz.h]] };
       draftStrokes.push(draftCur);
-      draftCtx.strokeStyle = draftColor; draftCtx.lineWidth = draftWidth;
+      draftCtx.globalCompositeOperation = erasing ? 'destination-out' : 'source-over';
+      draftCtx.strokeStyle = erasing ? 'rgba(0,0,0,1)' : draftColor;
+      draftCtx.lineWidth = w;
       draftCtx.beginPath(); draftCtx.moveTo(p.x, p.y);
     }
     function move(e) {
@@ -1230,6 +1237,7 @@
       e.preventDefault();
       var sz = _draftSize(), p = pos(e);
       draftCur.pts.push([p.x / sz.w, p.y / sz.h]);
+      draftCtx.globalCompositeOperation = draftCur.mode === 'eraser' ? 'destination-out' : 'source-over';
       draftCtx.lineTo(p.x, p.y); draftCtx.stroke();
     }
     function finish(e) {
@@ -1266,6 +1274,7 @@
         '<div class="draft-bar">' +
         '  <button class="db-btn db-done" title="完成并保存">✓ 完成</button>' +
         '  <button class="db-btn db-undo" title="撤销上一笔">↶ 撤销</button>' +
+        '  <button class="db-btn db-eraser" title="橡皮擦：擦除已有笔迹">🧽 橡皮</button>' +
         '  <button class="db-btn db-clear" title="清空本草稿">🗑 清空</button>' +
         '  <span class="db-sep"></span>' +
         '  <span class="db-colors">' +
@@ -1290,15 +1299,26 @@
         var sz = _draftSize(); draftCtx.clearRect(0, 0, sz.w, sz.h);
         var d = loadDrafts(); delete d[draftCurId]; saveDrafts(d); markDraftBtn(draftCurId);
       });
+      var setDraftMode = function (mode) {
+        draftMode = mode;
+        var erBtn = draftLayer.querySelector('.db-eraser');
+        if (erBtn) erBtn.classList.toggle('is-on', mode === 'eraser');
+        if (draftCanvas) draftCanvas.classList.toggle('is-eraser', mode === 'eraser');
+      };
+      draftLayer.querySelector('.db-eraser').addEventListener('click', function () {
+        setDraftMode(draftMode === 'eraser' ? 'pen' : 'eraser');
+      });
       draftLayer.querySelectorAll('.db-color').forEach(function (btn) {
         btn.addEventListener('click', function () {
           draftColor = btn.dataset.c;
+          setDraftMode('pen');
           draftLayer.querySelectorAll('.db-color').forEach(function (b) { b.classList.toggle('is-on', b === btn); });
         });
       });
       draftLayer.querySelectorAll('.db-pen').forEach(function (btn) {
         btn.addEventListener('click', function () {
           draftWidth = parseInt(btn.dataset.w, 10);
+          setDraftMode('pen');
           draftLayer.querySelectorAll('.db-pen').forEach(function (b) { b.classList.toggle('is-on', b === btn); });
         });
       });

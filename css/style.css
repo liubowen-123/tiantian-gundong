@@ -316,6 +316,10 @@ html, body {
   cursor: pointer; padding: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
 }
 .db-color.is-on { border-color: var(--primary); transform: scale(1.12); }
+.db-btn.db-eraser.is-on { background: rgba(234,88,12,.16); color: #ea580c; }
+.draft-canvas.is-eraser {
+  cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36'><circle cx='18' cy='18' r='15' fill='rgba(234,88,12,0.15)' stroke='%23ea580c' stroke-width='2'/></svg>") 18 18, cell;
+}
 html.dark .draft-bar { background: rgba(34,38,46,.86); }
 html.dark .db-btn { color: #e5e7eb; }
 html.dark .db-btn:active { background: rgba(255,255,255,.1); }
